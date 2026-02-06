@@ -26,7 +26,8 @@ body {
 }
 
 #app {
-  max-width: 42rem;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 2rem 1rem;
+  padding: 1.5rem 1rem;
+  min-height: 100vh;
 }

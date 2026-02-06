@@ -1,11 +1,12 @@
 import os
+import uuid
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
 
 from app import db
-from app.models import BookResponse
+from app.models import AddToBacklogBody, BookResponse, BookUpdate, BacklogOrderUpdate, CreateArticleBody
 
 app = FastAPI(title="Book Log API")
 
@@ -165,13 +166,24 @@ def _enrich_from_google_books(response: dict, gb_item: dict) -> None:
         response["subjects"] = list(vi["categories"])
 
 
+def _is_article_id(id_str: str) -> bool:
+    """True if the identifier is an article/poem id (article-<uuid>)."""
+    return id_str.startswith("article-") and len(id_str) > 8
+
+
 @app.get("/api/books/isbn/{isbn}")
 async def get_book_by_isbn(isbn: str):
     """
-    Look up a book by ISBN. Uses MongoDB cache when MONGODB_URI is set; otherwise calls APIs.
-    Tries Open Library first, then Google Books as fallback.
-    Accepts ISBN-10 or ISBN-13.
+    Look up a book by ISBN or an article by id (article-<uuid>).
+    For ISBN: uses MongoDB cache when MONGODB_URI is set; otherwise calls Open Library / Google Books.
+    For article id: returns from DB only.
     """
+    if _is_article_id(isbn):
+        if db.is_db_enabled():
+            cached = await db.get_book_by_isbn(isbn)
+            if cached is not None:
+                return cached.model_dump(mode="json")
+        raise HTTPException(status_code=404, detail="Article not found")
     isbn = normalize_isbn(isbn)
     if not isbn or not isbn.isdigit():
         raise HTTPException(status_code=400, detail="Invalid ISBN: must contain only digits (and optional spaces/dashes)")
@@ -248,3 +260,120 @@ async def list_history(limit: int = 20):
     """Return recent book lookups (when MongoDB is enabled). Ordered by last lookup time."""
     items = await db.get_history(limit=limit)
     return [b.model_dump(mode="json") for b in items]
+
+
+# --- Reading log (backlog, in-progress, finished) - require MongoDB ---
+
+@app.get("/api/books/backlog")
+async def list_backlog():
+    """List books in backlog (ordered). Returns [] when DB disabled."""
+    items = await db.get_backlog()
+    return [b.model_dump(mode="json") for b in items]
+
+
+@app.post("/api/books/backlog")
+async def add_to_backlog(body: AddToBacklogBody):
+    """Add book by ISBN to backlog. Book must exist in DB (look it up first)."""
+    isbn = normalize_isbn(body.isbn)
+    if not isbn or not isbn.isdigit():
+        raise HTTPException(status_code=400, detail="Invalid ISBN")
+    if not db.is_db_enabled():
+        raise HTTPException(status_code=503, detail="Database not configured")
+    existing = await db.get_book_by_isbn(isbn)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Book not found. Look it up by ISBN first.")
+    book = await db.add_to_backlog(isbn, existing.model_dump())
+    if book is None:
+        raise HTTPException(status_code=503, detail="Database error")
+    return book.model_dump(mode="json")
+
+
+@app.put("/api/books/backlog/order")
+async def reorder_backlog(body: BacklogOrderUpdate):
+    """Reorder backlog by providing ordered list of ISBNs or article ids."""
+    if not db.is_db_enabled():
+        raise HTTPException(status_code=503, detail="Database not configured")
+    isbns = []
+    for i in body.isbns:
+        if _is_article_id(i):
+            isbns.append(i)
+        else:
+            n = normalize_isbn(i)
+            if n:
+                isbns.append(n)
+    await db.reorder_backlog(isbns)
+    return {"ok": True}
+
+
+@app.get("/api/books/in-progress")
+async def list_in_progress():
+    """List books currently in progress."""
+    items = await db.get_in_progress()
+    return [b.model_dump(mode="json") for b in items]
+
+
+@app.get("/api/books/finished")
+async def list_finished():
+    """List finished books (by finished date desc)."""
+    items = await db.get_finished()
+    return [b.model_dump(mode="json") for b in items]
+
+
+@app.patch("/api/books/{isbn}")
+async def update_book(isbn: str, body: BookUpdate):
+    """Update book/article metadata or status/current_page/finished_date. id is ISBN or article-<uuid>."""
+    if not _is_article_id(isbn):
+        isbn = normalize_isbn(isbn)
+        if not isbn or not isbn.isdigit():
+            raise HTTPException(status_code=400, detail="Invalid ISBN or article id")
+    if not db.is_db_enabled():
+        raise HTTPException(status_code=503, detail="Database not configured")
+    book = await db.update_book(isbn, body)
+    if book is None:
+        raise HTTPException(status_code=404, detail="Book or article not found")
+    return book.model_dump(mode="json")
+
+
+@app.post("/api/articles")
+async def create_article(body: CreateArticleBody):
+    """Create an article or poem manually (title required). Stored with id article-<uuid>."""
+    if not db.is_db_enabled():
+        raise HTTPException(status_code=503, detail="Database not configured")
+    article_id = f"article-{uuid.uuid4().hex}"
+    entry_type = body.entry_type if body.entry_type in ("article", "poem") else "article"
+    status = body.status or "backlog"
+    today = db.get_app_today()
+    default_title = "Untitled poem" if entry_type == "poem" else "Untitled article"
+    article = BookResponse(
+        isbn=article_id,
+        entry_type=entry_type,
+        title=body.title.strip() or default_title,
+        authors=body.authors or ["Unknown"],
+        publishers=body.publishers or [],
+        publish_date=body.publish_date,
+        number_of_pages=body.number_of_pages,
+        description=body.description,
+        status=status,
+        finished_date=today if status == "finished" else None,
+    )
+    created = await db.create_article(article)
+    if created is None:
+        raise HTTPException(status_code=503, detail="Database error")
+    return created.model_dump(mode="json")
+
+
+@app.get("/api/books/stats")
+async def get_stats():
+    """Pages read this month/year and items (books + articles + poems) finished count."""
+    if not db.is_db_enabled():
+        return {"pages_this_month": 0, "pages_this_year": 0, "books_finished_count": 0, "items_finished_count": 0}
+    return await db.get_stats()
+
+
+@app.get("/api/reading-activity/dates")
+async def get_reading_activity_dates():
+    """Return list of YYYY-MM-DD dates when user logged reading (started or finished an item)."""
+    if not db.is_db_enabled():
+        return {"dates": []}
+    dates = await db.get_reading_activity_dates()
+    return {"dates": dates}

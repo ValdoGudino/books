@@ -38,9 +38,17 @@ Open [http://localhost:5173](http://localhost:5173). The Vite dev server proxies
 
 1. Start MongoDB: `docker compose up -d` (from the repo root).
 2. Set `MONGODB_URI=mongodb://localhost:27017` in `backend/.env` (or via direnv).
-3. Restart the backend. Looked-up books are stored by ISBN; repeat lookups are served from the DB without calling the APIs. The frontend shows a **Recent lookups** list; click an item to look it up again.
+3. (Optional) Set `APP_TIMEZONE=America/Chicago` (or your timezone) so "today" and stats use your local date instead of UTC.
+4. Restart the backend. Looked-up books are stored by ISBN; repeat lookups are served from the DB without calling the APIs.
 
-If `MONGODB_URI` is not set, the app does not use a database: every lookup calls Open Library / Google Books, and the history endpoint returns an empty list.
+**Reading log (requires MongoDB):**
+- **Backlog** – Add books from a lookup; drag and drop to reorder. Move to “In progress” when you start reading.
+- **In progress** – Set current page and see progress; mark as finished with a date.
+- **Finished** – List of books you’ve finished with their finished date.
+- **Stats** – Pages read this month, pages read this year, and books finished count.
+- **Edit** – Edit any book (title, authors, publishers, pages, description, etc.) to fill in missing data from the APIs.
+
+If `MONGODB_URI` is not set, the app does not use a database: every lookup calls Open Library / Google Books, history returns an empty list, and backlog/in-progress/finished/stats are unavailable.
 
 ## Usage
 
