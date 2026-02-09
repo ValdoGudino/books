@@ -74,3 +74,9 @@ class CreateArticleBody(BaseModel):
     number_of_pages: int | None = None
     description: str | None = None
     status: BookStatus | None = "backlog"
+
+
+class CalendarOverrideBody(BaseModel):
+    """Body for PUT /api/reading-activity/calendar-override."""
+    date: str  # YYYY-MM-DD
+    show: bool

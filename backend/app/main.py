@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import httpx
 
 from app import db
-from app.models import AddToBacklogBody, BookResponse, BookUpdate, BacklogOrderUpdate, CreateArticleBody
+from app.models import AddToBacklogBody, BookResponse, BookUpdate, BacklogOrderUpdate, CalendarOverrideBody, CreateArticleBody
 
 app = FastAPI(title="Book Log API")
 
@@ -334,6 +334,21 @@ async def update_book(isbn: str, body: BookUpdate):
     return book.model_dump(mode="json")
 
 
+@app.delete("/api/books/{isbn}")
+async def delete_book(isbn: str):
+    """Delete book/article. Removes from Read, backlog, in progress, and history."""
+    if not _is_article_id(isbn):
+        isbn = normalize_isbn(isbn)
+        if not isbn or not isbn.isdigit():
+            raise HTTPException(status_code=400, detail="Invalid ISBN or article id")
+    if not db.is_db_enabled():
+        raise HTTPException(status_code=503, detail="Database not configured")
+    deleted = await db.delete_book(isbn)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Book or article not found")
+    return {"ok": True}
+
+
 @app.post("/api/articles")
 async def create_article(body: CreateArticleBody):
     """Create an article or poem manually (title required). Stored with id article-<uuid>."""
@@ -363,17 +378,59 @@ async def create_article(body: CreateArticleBody):
 
 
 @app.get("/api/books/stats")
-async def get_stats():
-    """Pages read this month/year and items (books + articles + poems) finished count."""
+async def get_stats_route(today: str | None = None):
+    """Pages from finished items + pages recorded (progress) this month/year. Optional today=YYYY-MM-DD uses that date (client's date)."""
     if not db.is_db_enabled():
-        return {"pages_this_month": 0, "pages_this_year": 0, "books_finished_count": 0, "items_finished_count": 0}
-    return await db.get_stats()
+        return {
+            "pages_this_month": 0, "pages_this_year": 0,
+            "pages_from_finished_this_month": 0, "pages_from_finished_this_year": 0,
+            "pages_recorded_this_month": 0, "pages_recorded_this_year": 0,
+            "books_finished_count": 0, "items_finished_count": 0,
+        }
+    as_of_date = None
+    if today and len(today) >= 10:
+        try:
+            from datetime import date as date_type
+            y, m, d = int(today[:4]), int(today[5:7]), int(today[8:10])
+            as_of_date = date_type(y, m, d)
+        except (ValueError, IndexError):
+            pass
+    return await db.get_stats(as_of_date=as_of_date)
 
 
 @app.get("/api/reading-activity/dates")
 async def get_reading_activity_dates():
-    """Return list of YYYY-MM-DD dates when user logged reading (started or finished an item)."""
+    """Return list of YYYY-MM-DD dates to show on calendar (computed activity merged with manual overrides)."""
     if not db.is_db_enabled():
         return {"dates": []}
     dates = await db.get_reading_activity_dates()
     return {"dates": dates}
+
+
+@app.put("/api/reading-activity/calendar-override")
+async def set_calendar_override(body: CalendarOverrideBody):
+    """Set manual calendar day on/off. Override has final say in UI."""
+    if not db.is_db_enabled():
+        raise HTTPException(status_code=503, detail="Database not configured")
+    date_str = (body.date or "")[:10]
+    if len(date_str) < 10:
+        raise HTTPException(status_code=400, detail="date (YYYY-MM-DD) required")
+    await db.set_calendar_override(date_str, body.show)
+    dates = await db.get_reading_activity_dates()
+    return {"dates": dates}
+
+
+@app.get("/api/reading-activity/month")
+async def get_month_summary(year: int, month: int):
+    """Return stats for a calendar month: pages_read, items_finished, dates (activity days in that month). Month 1-12."""
+    if not db.is_db_enabled():
+        return {"pages_read": 0, "items_finished": [], "dates": []}
+    if not (1 <= month <= 12):
+        raise HTTPException(status_code=400, detail="month must be 1-12")
+    data = await db.get_month_summary(year, month)
+    return {
+        "pages_read": data["pages_read"],
+        "pages_recorded": data.get("pages_recorded", 0),
+        "items_finished": [b.model_dump(mode="json") for b in data["items_finished"]],
+        "dates": data["dates"],
+    }

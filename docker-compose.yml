@@ -1,6 +1,6 @@
 # Local dev MongoDB for the book log backend.
 # Run: docker compose up -d
-# Backend uses MONGODB_URI=mongodb://localhost:27017 (see backend/.env.example).
+# Backend connects to MongoDB via MONGODB_URI (service name "mongo" on Docker network).
 
 services:
   mongo:
@@ -9,6 +9,28 @@ services:
       - "27017:27017"
     volumes:
       - mongo_data:/data/db
+
+  books-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: local/books-backend
+    ports:
+      - "8000:8000"
+    environment:
+      MONGODB_URI: mongodb://mongo:27017
+    depends_on:
+      - mongo
+
+  books-ui:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: local/books-ui
+    ports:
+      - "80:80"
+    depends_on:
+      - books-backend
 
 volumes:
   mongo_data:
