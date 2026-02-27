@@ -1,5 +1,5 @@
 """
-Unit tests for the book lookup API. Open Library is mocked so tests are fast and stable.
+Unit tests for the book lookup API. Google Books API is mocked so tests are fast and stable.
 """
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -8,45 +8,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
-# Example Open Library response for ISBN 9780670016907 (The Grapes of Wrath 75th Anniversary)
-OPEN_LIBRARY_BOOK_RESPONSE = {
-    "publishers": ["Viking"],
-    "covers": [12715891],
-    "physical_format": "hardcover",
-    "full_title": "The Grapes of Wrath 75th Anniversary Edition",
-    "key": "/books/OL28349077M",
-    "authors": [{"key": "/authors/OL25788A"}],
-    "source_records": [
-        "amazon:067001690X",
-        "marc:marc_loc_2016/BooksAll.2016.part41.utf8:267615119:1048",
-    ],
-    "title": "The Grapes of Wrath",
-    "notes": "Source title: The Grapes of Wrath: 75th Anniversary Edition",
-    "number_of_pages": 496,
-    "publish_date": "2014",
-    "works": [{"key": "/works/OL23205W"}],
-    "type": {"key": "/type/edition"},
-    "identifiers": {},
-    "classifications": {},
-    "languages": [{"key": "/languages/eng"}],
-    "edition_name": "75th Anniversary Edition",
-    "isbn_10": ["067001690X"],
-    "isbn_13": ["9780670016907"],
-    "lccn": ["2014381538", "bl2014008634"],
-    "ocaid": "grapesofwrath0000unse_b4m4",
-    "lc_classifications": ["PS3537.T3234 G8 2014", "PS3537.T3234G8 2014"],
-    "oclc_numbers": ["875270180"],
-    "local_id": ["urn:bwbsku:P7-CHF-758"],
-    "latest_revision": 11,
-    "revision": 11,
-    "created": {"type": "/type/datetime", "value": "2020-07-19T15:38:37.492591"},
-    "last_modified": {"type": "/type/datetime", "value": "2022-12-08T05:00:43.621675"},
-}
-
-# Author name returned by Open Library for /authors/OL25788A (John Steinbeck)
-OPEN_LIBRARY_AUTHOR_RESPONSE = {"name": "John Steinbeck"}
-
-# Google Books fallback response for ISBN 9781685781347 (Early Church Fathers Collection)
+# Google Books response for ISBN 9781685781347 (Early Church Fathers Collection)
 GOOGLE_BOOKS_VOLUME_RESPONSE = {
     "kind": "books#volume",
     "id": "Pghc0QEACAAJ",
@@ -64,6 +26,24 @@ GOOGLE_BOOKS_VOLUME_RESPONSE = {
     },
 }
 
+# Google Books response for ISBN 9780670016907 (The Grapes of Wrath)
+GOOGLE_BOOKS_GRAPES_RESPONSE = {
+    "kind": "books#volume",
+    "id": "abc123",
+    "volumeInfo": {
+        "title": "The Grapes of Wrath",
+        "publishedDate": "2014",
+        "description": "A Pulitzer Prize-winning novel.",
+        "authors": ["John Steinbeck"],
+        "publisher": "Viking",
+        "pageCount": 496,
+        "categories": ["Fiction"],
+        "imageLinks": {
+            "thumbnail": "http://books.google.com/books/content?id=abc123&zoom=1&source=gbs_api",
+        },
+    },
+}
+
 
 def _make_response(status_code: int, json_data: dict):
     resp = MagicMock()
@@ -75,14 +55,12 @@ def _make_response(status_code: int, json_data: dict):
     return resp
 
 
-def _mock_async_client():
-    """Build a mock AsyncClient that returns our canned Open Library responses."""
+def _mock_async_client(isbn: str, volume_response: dict):
+    """Build a mock AsyncClient that returns a Google Books response for the given ISBN."""
 
     async def mock_get(url: str, *args, **kwargs):
-        if "openlibrary.org/isbn/9780670016907.json" in url or url.endswith("/isbn/9780670016907.json"):
-            return _make_response(200, OPEN_LIBRARY_BOOK_RESPONSE)
-        if "openlibrary.org/authors/OL25788A.json" in url or "/authors/OL25788A.json" in url:
-            return _make_response(200, OPEN_LIBRARY_AUTHOR_RESPONSE)
+        if "googleapis.com" in url and isbn in url:
+            return _make_response(200, {"totalItems": 1, "items": [volume_response]})
         return _make_response(404, {})
 
     mock_instance = MagicMock()
@@ -94,8 +72,8 @@ def _mock_async_client():
 
 @patch("app.main.httpx.AsyncClient")
 def test_get_book_by_isbn_returns_transformed_book(MockAsyncClient):
-    """GET /api/books/isbn/{isbn} with mocked Open Library returns our schema."""
-    MockAsyncClient.return_value = _mock_async_client()
+    """GET /api/books/isbn/{isbn} with mocked Google Books returns our schema."""
+    MockAsyncClient.return_value = _mock_async_client("9780670016907", GOOGLE_BOOKS_GRAPES_RESPONSE)
 
     client = TestClient(app)
     response = client.get("/api/books/isbn/9780670016907")
@@ -108,15 +86,15 @@ def test_get_book_by_isbn_returns_transformed_book(MockAsyncClient):
     assert data["publishers"] == ["Viking"]
     assert data["publish_date"] == "2014"
     assert data["number_of_pages"] == 496
-    assert data["cover_url"] == "https://covers.openlibrary.org/b/id/12715891-M.jpg"
-    assert data["subjects"] == []
-    assert data["description"] is None
+    assert data["cover_url"].startswith("https://")
+    assert data["subjects"] == ["Fiction"]
+    assert "Pulitzer" in (data["description"] or "")
 
 
 @patch("app.main.httpx.AsyncClient")
 def test_get_book_by_isbn_normalizes_isbn(MockAsyncClient):
     """ISBN with spaces/dashes is normalized before lookup."""
-    MockAsyncClient.return_value = _mock_async_client()
+    MockAsyncClient.return_value = _mock_async_client("9780670016907", GOOGLE_BOOKS_GRAPES_RESPONSE)
 
     client = TestClient(app)
     response = client.get("/api/books/isbn/978-0670-01690-7")
@@ -127,19 +105,12 @@ def test_get_book_by_isbn_normalizes_isbn(MockAsyncClient):
 
 @patch("app.main.httpx.AsyncClient")
 def test_get_book_by_isbn_not_found(MockAsyncClient):
-    """Unknown ISBN returns 404 when Open Library 404s and Google Books has no result."""
+    """Unknown ISBN returns 404 when Google Books has no result."""
 
     async def mock_get(url: str, *args, **kwargs):
-        if "openlibrary.org" in url:
-            resp = MagicMock()
-            resp.status_code = 404
-            resp.raise_for_status = MagicMock(side_effect=Exception("404"))
-            return resp
         if "googleapis.com" in url:
             return _make_response(200, {"totalItems": 0, "items": []})
-        resp = MagicMock()
-        resp.status_code = 404
-        return resp
+        return _make_response(404, {})
 
     mock_instance = MagicMock()
     mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
@@ -155,27 +126,9 @@ def test_get_book_by_isbn_not_found(MockAsyncClient):
 
 
 @patch("app.main.httpx.AsyncClient")
-def test_get_book_by_isbn_fallback_google_books(MockAsyncClient):
-    """When Open Library 404s, fallback to Google Books returns our schema."""
-
-    async def mock_get(url: str, *args, **kwargs):
-        if "openlibrary.org" in url:
-            resp = MagicMock()
-            resp.status_code = 404
-            resp.raise_for_status = MagicMock(side_effect=Exception("404"))
-            return resp
-        if "googleapis.com" in url:
-            return _make_response(
-                200,
-                {"totalItems": 1, "items": [GOOGLE_BOOKS_VOLUME_RESPONSE]},
-            )
-        return _make_response(404, {})
-
-    mock_instance = MagicMock()
-    mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
-    mock_instance.__aexit__ = AsyncMock(return_value=None)
-    mock_instance.get = AsyncMock(side_effect=mock_get)
-    MockAsyncClient.return_value = mock_instance
+def test_get_book_by_isbn_google_books(MockAsyncClient):
+    """GET /api/books/isbn/{isbn} returns schema populated from Google Books."""
+    MockAsyncClient.return_value = _mock_async_client("9781685781347", GOOGLE_BOOKS_VOLUME_RESPONSE)
 
     client = TestClient(app)
     response = client.get("/api/books/isbn/9781685781347")
