@@ -107,6 +107,24 @@ def _google_books_url(isbn: str) -> str:
     return url
 
 
+def _google_books_search_url(q: str, max_results: int = 10) -> str:
+    """Google Books volumes URL for a free-text query."""
+    url = f"https://www.googleapis.com/books/v1/volumes?q={q}&maxResults={max_results}"
+    key = os.environ.get("GOOGLE_BOOKS_API_KEY", "").strip()
+    if key:
+        url = f"{url}&key={key}"
+    return url
+
+
+def _isbn_from_google_item(vi: dict) -> str | None:
+    """Extract ISBN-13 (preferred) or ISBN-10 from a Google Books volumeInfo dict."""
+    identifiers = vi.get("industryIdentifiers") or []
+    isbn13 = next((i["identifier"] for i in identifiers if i.get("type") == "ISBN_13"), None)
+    if isbn13:
+        return isbn13
+    return next((i["identifier"] for i in identifiers if i.get("type") == "ISBN_10"), None)
+
+
 async def _fetch_google_books_by_isbn(client: httpx.AsyncClient, isbn: str) -> dict | None:
     """Fetch first volume from Google Books by ISBN. Returns volume item or None (no results).
     Raises HTTPException on API errors so they are not silently treated as missing books."""
@@ -170,6 +188,43 @@ async def get_book_by_isbn(isbn: str):
         if db.is_db_enabled():
             await db.save_book_metadata(BookResponse(**result))
         return result
+
+
+@app.get("/api/books/search")
+async def search_books(title: str | None = None, author: str | None = None):
+    """Search Google Books by title and/or author. Returns up to 10 results."""
+    title = (title or "").strip()
+    author = (author or "").strip()
+    if not title and not author:
+        raise HTTPException(status_code=400, detail="title or author query parameter is required")
+
+    parts = []
+    if title:
+        parts.append(f"intitle:{title}")
+    if author:
+        parts.append(f"inauthor:{author}")
+    q = "+".join(parts)
+
+    headers = {"User-Agent": "BookLog/1.0 (https://github.com/your-org/books)"}
+    async with httpx.AsyncClient(follow_redirects=True, headers=headers) as client:
+        url = _google_books_search_url(q)
+        resp = await client.get(url, timeout=15.0)
+        if resp.status_code != 200:
+            error_detail = (
+                resp.json().get("error", {}).get("message", resp.text)
+                if resp.content else resp.reason_phrase
+            )
+            raise HTTPException(
+                status_code=502,
+                detail=f"Google Books API error ({resp.status_code}): {error_detail}",
+            )
+        items = resp.json().get("items") or []
+        results = []
+        for item in items:
+            vi = item.get("volumeInfo") or {}
+            isbn = _isbn_from_google_item(vi) or ""
+            results.append(_book_from_google_books(item, isbn))
+        return results
 
 
 @app.get("/api/books/history")

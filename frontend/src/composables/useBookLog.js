@@ -47,6 +47,10 @@ const activityDates = ref([]);
 const calendarMonth = ref(new Date().getMonth()); // 0-11
 const calendarYear = ref(new Date().getFullYear());
 const historyMinimized = ref(false);
+const searchMode = ref("isbn"); // "isbn" | "title"
+const titleQuery = ref("");
+const authorQuery = ref("");
+const searchResults = ref([]);
 const monthSummary = ref({ pages_read: 0, pages_recorded: 0, items_finished: [], dates: [] });
 const viewBookItem = ref(null);
 
@@ -55,6 +59,10 @@ export function useBookLog() {
         const cleaned = (isbn.value || "").replace(/[\s-]/g, "");
         return cleaned.length >= 10 && /^\d+$/.test(cleaned);
     });
+
+    const canSearchByTitle = computed(() =>
+        titleQuery.value.trim().length > 0 || authorQuery.value.trim().length > 0,
+    );
 
     const today = computed(() => new Date().toISOString().slice(0, 10));
 
@@ -370,6 +378,42 @@ export function useBookLog() {
             error.value = e.message || "Something went wrong";
         } finally {
             loading.value = false;
+        }
+    }
+
+    async function searchByTitle() {
+        if (!canSearchByTitle.value) return;
+        error.value = null;
+        book.value = null;
+        searchResults.value = [];
+        loading.value = true;
+        try {
+            const params = new URLSearchParams();
+            if (titleQuery.value.trim()) params.set("title", titleQuery.value.trim());
+            if (authorQuery.value.trim()) params.set("author", authorQuery.value.trim());
+            const res = await fetch(`/api/books/search?${params}`);
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.detail || res.statusText || "Search failed");
+            }
+            searchResults.value = await res.json();
+            if (searchResults.value.length === 0) {
+                error.value = "No books found for that search.";
+            }
+        } catch (e) {
+            error.value = e.message || "Something went wrong";
+        } finally {
+            loading.value = false;
+        }
+    }
+
+    async function selectSearchResult(result) {
+        searchResults.value = [];
+        if (result.isbn) {
+            isbn.value = result.isbn;
+            await lookup();
+        } else {
+            book.value = result;
         }
     }
 
@@ -718,6 +762,11 @@ export function useBookLog() {
 
     return {
         isbn,
+        searchMode,
+        titleQuery,
+        authorQuery,
+        searchResults,
+        canSearchByTitle,
         book,
         loading,
         error,
@@ -764,6 +813,8 @@ export function useBookLog() {
         submitArticle,
         submitPoem,
         lookup,
+        searchByTitle,
+        selectSearchResult,
         refreshMetadata,
         lookupFromHistory,
         addToBacklog,
