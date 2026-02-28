@@ -1,4 +1,5 @@
 <script setup>
+import { ref } from "vue";
 import { useBookLog } from "../composables/useBookLog";
 
 const {
@@ -13,8 +14,37 @@ const {
     onBacklogDragOver,
     onBacklogDrop,
     moveBacklogItem,
+    moveBacklogItemToPosition,
     openViewModal,
 } = useBookLog();
+
+const vFocus = { mounted: (el) => { el.focus(); el.select(); } };
+
+const editingPosIsbn = ref(null);
+const editingPosValue = ref(1);
+const posEditEscaped = ref(false);
+
+function startPosEdit(isbnVal, currentPos) {
+    editingPosIsbn.value = isbnVal;
+    editingPosValue.value = currentPos;
+    posEditEscaped.value = false;
+}
+
+function cancelPosEdit() {
+    posEditEscaped.value = true;
+    editingPosIsbn.value = null;
+}
+
+async function applyPosEdit(isbnVal, sectionType) {
+    if (posEditEscaped.value) {
+        posEditEscaped.value = false;
+        return;
+    }
+    editingPosIsbn.value = null;
+    const pos = editingPosValue.value;
+    if (pos == null || !Number.isFinite(pos) || !Number.isInteger(pos)) return;
+    await moveBacklogItemToPosition(isbnVal, sectionType, pos);
+}
 </script>
 
 <template>
@@ -22,7 +52,7 @@ const {
         <section v-if="backlogBooks.length || backlogArticles.length || backlogPoems.length" class="backlog">
             <h2 class="section-title">
                 Backlog
-                <span class="hint">(drag or use ↑↓ to reorder within each group)</span>
+                <span class="hint">(drag, use ↑↓, or click the number to reorder within each group)</span>
             </h2>
             <template v-if="backlogBooks.length">
                 <h3 class="subsection-title">Books</h3>
@@ -37,7 +67,22 @@ const {
                         @drop="onBacklogDrop($event, 'book', index)"
                         @click="openViewModal(item)"
                     >
-                        <span class="backlog-pos">{{ index + 1 }}</span>
+                        <span class="backlog-pos" :class="{ 'backlog-pos-editing': editingPosIsbn === item.isbn }" @click.stop="startPosEdit(item.isbn, index + 1)">
+                            <input
+                                v-if="editingPosIsbn === item.isbn"
+                                v-focus
+                                class="pos-input"
+                                type="number"
+                                :min="1"
+                                :max="backlogBooks.length"
+                                v-model.number="editingPosValue"
+                                @keydown.enter.stop="applyPosEdit(item.isbn, 'book')"
+                                @keydown.escape.stop="cancelPosEdit"
+                                @blur="applyPosEdit(item.isbn, 'book')"
+                                @click.stop
+                            />
+                            <template v-else>{{ index + 1 }}</template>
+                        </span>
                         <img v-if="item.cover_url" :src="item.cover_url" :alt="item.title" class="list-cover" />
                         <div class="list-info">
                             <span class="list-title">{{ item.title }}</span>
@@ -69,7 +114,22 @@ const {
                         @drop="onBacklogDrop($event, 'article', index)"
                         @click="openViewModal(item)"
                     >
-                        <span class="backlog-pos">{{ index + 1 }}</span>
+                        <span class="backlog-pos" :class="{ 'backlog-pos-editing': editingPosIsbn === item.isbn }" @click.stop="startPosEdit(item.isbn, index + 1)">
+                            <input
+                                v-if="editingPosIsbn === item.isbn"
+                                v-focus
+                                class="pos-input"
+                                type="number"
+                                :min="1"
+                                :max="backlogArticles.length"
+                                v-model.number="editingPosValue"
+                                @keydown.enter.stop="applyPosEdit(item.isbn, 'article')"
+                                @keydown.escape.stop="cancelPosEdit"
+                                @blur="applyPosEdit(item.isbn, 'article')"
+                                @click.stop
+                            />
+                            <template v-else>{{ index + 1 }}</template>
+                        </span>
                         <img v-if="item.cover_url" :src="item.cover_url" :alt="item.title" class="list-cover" />
                         <div class="list-info">
                             <span class="list-title">{{ item.title }}</span>
@@ -102,7 +162,22 @@ const {
                         @drop="onBacklogDrop($event, 'poem', index)"
                         @click="openViewModal(item)"
                     >
-                        <span class="backlog-pos">{{ index + 1 }}</span>
+                        <span class="backlog-pos" :class="{ 'backlog-pos-editing': editingPosIsbn === item.isbn }" @click.stop="startPosEdit(item.isbn, index + 1)">
+                            <input
+                                v-if="editingPosIsbn === item.isbn"
+                                v-focus
+                                class="pos-input"
+                                type="number"
+                                :min="1"
+                                :max="backlogPoems.length"
+                                v-model.number="editingPosValue"
+                                @keydown.enter.stop="applyPosEdit(item.isbn, 'poem')"
+                                @keydown.escape.stop="cancelPosEdit"
+                                @blur="applyPosEdit(item.isbn, 'poem')"
+                                @click.stop
+                            />
+                            <template v-else>{{ index + 1 }}</template>
+                        </span>
                         <img v-if="item.cover_url" :src="item.cover_url" :alt="item.title" class="list-cover" />
                         <div class="list-info">
                             <span class="list-title">{{ item.title }}</span>
@@ -145,6 +220,29 @@ const {
     text-align: right;
     flex-shrink: 0;
     font-variant-numeric: tabular-nums;
+    cursor: pointer;
+}
+.backlog-pos:hover:not(.backlog-pos-editing) {
+    color: var(--accent);
+    text-decoration: underline dotted;
+}
+.backlog-pos-editing {
+    cursor: default;
+}
+.pos-input {
+    width: 2.5rem;
+    font-size: 0.75rem;
+    padding: 0.1rem 0.2rem;
+    border: 1px solid var(--accent);
+    border-radius: 3px;
+    background: var(--bg);
+    color: var(--text);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+}
+.pos-input::-webkit-inner-spin-button,
+.pos-input::-webkit-outer-spin-button {
+    opacity: 1;
 }
 .reorder-btns {
     display: flex;

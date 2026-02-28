@@ -628,6 +628,33 @@ export function useBookLog() {
         );
     }
 
+    async function moveBacklogItemToPosition(isbnVal, sectionType, newPosition) {
+        const sectionItems =
+            sectionType === "article"
+                ? backlogArticles.value
+                : sectionType === "poem"
+                  ? backlogPoems.value
+                  : backlogBooks.value;
+        const currentIndex = sectionItems.findIndex((i) => i.isbn === isbnVal);
+        if (currentIndex === -1) return;
+        const newIndex = Math.max(0, Math.min(sectionItems.length - 1, newPosition - 1));
+        if (newIndex === currentIndex) return;
+        const reordered = [...sectionItems];
+        const [removed] = reordered.splice(currentIndex, 1);
+        reordered.splice(newIndex, 0, removed);
+        const fullOrder = mergeBacklogOrder(backlog.value, reordered, sectionType);
+        try {
+            await fetch("/api/books/backlog/order", {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ isbns: fullOrder.map((i) => i.isbn) }),
+            });
+            await loadBacklog();
+        } catch {
+            error.value = "Failed to reorder";
+        }
+    }
+
     async function moveBacklogItem(isbnVal, sectionType, direction) {
         const sectionItems =
             sectionType === "article"
@@ -857,6 +884,7 @@ export function useBookLog() {
         onBacklogDragOver,
         onBacklogDrop,
         moveBacklogItem,
+        moveBacklogItemToPosition,
         openEdit,
         saveEdit,
         calendarPrevMonth,
