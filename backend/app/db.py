@@ -94,6 +94,12 @@ async def delete_book(isbn: str) -> bool:
     return result.deleted_count > 0
 
 
+METADATA_FIELDS = {
+    "title", "authors", "publishers", "publish_date",
+    "number_of_pages", "cover_url", "subjects", "description",
+}
+
+
 async def save_book(book: BookResponse) -> None:
     """Upsert book by ISBN and set last_looked_up to now."""
     coll = _get_collection()
@@ -102,6 +108,21 @@ async def save_book(book: BookResponse) -> None:
     now = datetime.utcnow()
     payload = book.model_dump()
     payload["last_looked_up"] = now
+    await coll.update_one(
+        {"isbn": book.isbn},
+        {"$set": payload},
+        upsert=True,
+    )
+
+
+async def save_book_metadata(book: BookResponse) -> None:
+    """Update only metadata fields for an existing book, preserving all user-specific data."""
+    coll = _get_collection()
+    if coll is None:
+        return
+    raw = book.model_dump()
+    payload = {k: raw[k] for k in METADATA_FIELDS if k in raw}
+    payload["last_looked_up"] = datetime.utcnow()
     await coll.update_one(
         {"isbn": book.isbn},
         {"$set": payload},

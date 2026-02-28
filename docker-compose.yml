@@ -19,6 +19,7 @@ services:
       - "8000:8000"
     environment:
       MONGODB_URI: mongodb://mongo:27017
+      GOOGLE_BOOKS_API_KEY: ${GOOGLE_BOOKS_API_KEY:-}
     depends_on:
       - mongo
 

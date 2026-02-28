@@ -1,5 +1,6 @@
 """
-Unit tests for the book lookup API. Google Books API is mocked so tests are fast and stable.
+Unit tests for the book lookup API.
+Google Books is the primary source; Open Library is mocked where needed as a supplement.
 """
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -8,25 +9,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 
-# Google Books response for ISBN 9781685781347 (Early Church Fathers Collection)
-GOOGLE_BOOKS_VOLUME_RESPONSE = {
-    "kind": "books#volume",
-    "id": "Pghc0QEACAAJ",
-    "volumeInfo": {
-        "title": "Early Church Fathers Collection",
-        "publishedDate": "2024",
-        "description": "The Early Church Fathers Collection from Word on Fire Classics...",
-        "authors": ["Word on Fire"],
-        "publisher": "Word on Fire",
-        "pageCount": 0,
-        "categories": ["Apostolic Fathers"],
-        "imageLinks": {
-            "thumbnail": "http://books.google.com/books/content?id=Pghc0QEACAAJ&printsec=frontcover&img=1&zoom=1&source=gbs_api",
-        },
-    },
-}
-
-# Google Books response for ISBN 9780670016907 (The Grapes of Wrath)
+# Google Books response for ISBN 9780670016907 (The Grapes of Wrath) — full data
 GOOGLE_BOOKS_GRAPES_RESPONSE = {
     "kind": "books#volume",
     "id": "abc123",
@@ -44,6 +27,27 @@ GOOGLE_BOOKS_GRAPES_RESPONSE = {
     },
 }
 
+# Google Books response with pageCount == 0 (incomplete data)
+GOOGLE_BOOKS_ZERO_PAGES_RESPONSE = {
+    "kind": "books#volume",
+    "id": "Pghc0QEACAAJ",
+    "volumeInfo": {
+        "title": "Early Church Fathers Collection",
+        "publishedDate": "2024",
+        "description": "The Early Church Fathers Collection from Word on Fire Classics...",
+        "authors": ["Word on Fire"],
+        "publisher": "Word on Fire",
+        "pageCount": 0,
+        "categories": ["Apostolic Fathers"],
+        "imageLinks": {
+            "thumbnail": "http://books.google.com/books/content?id=Pghc0QEACAAJ&zoom=1&source=gbs_api",
+        },
+    },
+}
+
+# Minimal Open Library edition response used for page count enrichment
+OPEN_LIBRARY_PAGE_COUNT_RESPONSE = {"number_of_pages": 512}
+
 
 def _make_response(status_code: int, json_data: dict):
     resp = MagicMock()
@@ -56,7 +60,7 @@ def _make_response(status_code: int, json_data: dict):
 
 
 def _mock_async_client(isbn: str, volume_response: dict):
-    """Build a mock AsyncClient that returns a Google Books response for the given ISBN."""
+    """Mock client: Google Books returns the given volume; Open Library returns 404."""
 
     async def mock_get(url: str, *args, **kwargs):
         if "googleapis.com" in url and isbn in url:
@@ -126,22 +130,58 @@ def test_get_book_by_isbn_not_found(MockAsyncClient):
 
 
 @patch("app.main.httpx.AsyncClient")
-def test_get_book_by_isbn_google_books(MockAsyncClient):
-    """GET /api/books/isbn/{isbn} returns schema populated from Google Books."""
-    MockAsyncClient.return_value = _mock_async_client("9781685781347", GOOGLE_BOOKS_VOLUME_RESPONSE)
+def test_get_book_by_isbn_ol_supplements_zero_page_count(MockAsyncClient):
+    """When Google Books returns pageCount=0, the page count is patched from Open Library."""
+    isbn = "9781685781347"
+
+    async def mock_get(url: str, *args, **kwargs):
+        if "googleapis.com" in url:
+            return _make_response(200, {"totalItems": 1, "items": [GOOGLE_BOOKS_ZERO_PAGES_RESPONSE]})
+        if f"openlibrary.org/isbn/{isbn}.json" in url:
+            return _make_response(200, OPEN_LIBRARY_PAGE_COUNT_RESPONSE)
+        return _make_response(404, {})
+
+    mock_instance = MagicMock()
+    mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
+    mock_instance.__aexit__ = AsyncMock(return_value=None)
+    mock_instance.get = AsyncMock(side_effect=mock_get)
+    MockAsyncClient.return_value = mock_instance
 
     client = TestClient(app)
-    response = client.get("/api/books/isbn/9781685781347")
+    response = client.get(f"/api/books/isbn/{isbn}")
 
     assert response.status_code == 200
     data = response.json()
-    assert data["isbn"] == "9781685781347"
+    assert data["isbn"] == isbn
+    # All metadata comes from Google Books
     assert data["title"] == "Early Church Fathers Collection"
     assert data["authors"] == ["Word on Fire"]
-    assert data["publishers"] == ["Word on Fire"]
-    assert data["publish_date"] == "2024"
-    assert data["subjects"] == ["Apostolic Fathers"]
-    assert "Early Church Fathers" in (data["description"] or "")
+    # Page count patched in from Open Library
+    assert data["number_of_pages"] == 512
+
+
+@patch("app.main.httpx.AsyncClient")
+def test_get_book_by_isbn_keeps_google_page_count_when_ol_unavailable(MockAsyncClient):
+    """When Google returns pageCount=0 and OL has no data, number_of_pages stays 0."""
+    isbn = "9781685781347"
+
+    async def mock_get(url: str, *args, **kwargs):
+        if "googleapis.com" in url:
+            return _make_response(200, {"totalItems": 1, "items": [GOOGLE_BOOKS_ZERO_PAGES_RESPONSE]})
+        return _make_response(404, {})
+
+    mock_instance = MagicMock()
+    mock_instance.__aenter__ = AsyncMock(return_value=mock_instance)
+    mock_instance.__aexit__ = AsyncMock(return_value=None)
+    mock_instance.get = AsyncMock(side_effect=mock_get)
+    MockAsyncClient.return_value = mock_instance
+
+    client = TestClient(app)
+    response = client.get(f"/api/books/isbn/{isbn}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["number_of_pages"] == 0
 
 
 def test_get_book_by_isbn_invalid_isbn():

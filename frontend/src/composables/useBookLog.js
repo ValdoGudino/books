@@ -372,6 +372,26 @@ export function useBookLog() {
         }
     }
 
+    async function refreshMetadata() {
+        if (!book.value?.isbn) return;
+        error.value = null;
+        loading.value = true;
+        try {
+            const res = await fetch(`/api/books/isbn/${encodeURIComponent(book.value.isbn)}`);
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.detail || res.statusText || "Refresh failed");
+            }
+            book.value = await res.json();
+            await loadHistory();
+            await refreshReadingLog();
+        } catch (e) {
+            error.value = e.message || "Something went wrong";
+        } finally {
+            loading.value = false;
+        }
+    }
+
     function lookupFromHistory(item) {
         isbn.value = item.isbn;
         lookup();
@@ -735,6 +755,7 @@ export function useBookLog() {
         submitArticle,
         submitPoem,
         lookup,
+        refreshMetadata,
         lookupFromHistory,
         addToBacklog,
         startReading,

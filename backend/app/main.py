@@ -24,6 +24,25 @@ def normalize_isbn(isbn: str) -> str:
     return isbn.replace(" ", "").replace("-", "").strip()
 
 
+def _extract_description(desc):
+    """Open Library may return description as a plain string or {type, value} object."""
+    if desc is None:
+        return None
+    if isinstance(desc, str):
+        return desc
+    if isinstance(desc, dict) and "value" in desc:
+        return desc["value"]
+    return str(desc)
+
+
+async def _fetch_open_library_page_count(client: httpx.AsyncClient, isbn: str) -> int | None:
+    """Fetch the page count for an ISBN from Open Library. Returns None if unavailable."""
+    resp = await client.get(f"https://openlibrary.org/isbn/{isbn}.json")
+    if resp.status_code != 200:
+        return None
+    return resp.json().get("number_of_pages") or None
+
+
 def _book_from_google_books(item: dict, isbn: str) -> dict:
     """Build our response dict from Google Books volume item."""
     vi = item.get("volumeInfo") or {}
@@ -89,14 +108,18 @@ def _google_books_url(isbn: str) -> str:
 
 
 async def _fetch_google_books_by_isbn(client: httpx.AsyncClient, isbn: str) -> dict | None:
-    """Fetch first volume from Google Books by ISBN. Returns volume item or None."""
+    """Fetch first volume from Google Books by ISBN. Returns volume item or None (no results).
+    Raises HTTPException on API errors so they are not silently treated as missing books."""
     url = _google_books_url(isbn)
     resp = await client.get(url, timeout=15.0)
-    if resp.status_code != 200:
-        return None
-    data = resp.json()
-    items = data.get("items") or []
-    return items[0] if items else None
+    if resp.status_code == 200:
+        items = resp.json().get("items") or []
+        return items[0] if items else None
+    error_detail = resp.json().get("error", {}).get("message", resp.text) if resp.content else resp.reason_phrase
+    raise HTTPException(
+        status_code=502,
+        detail=f"Google Books API error ({resp.status_code}): {error_detail}",
+    )
 
 
 def _is_article_id(id_str: str) -> bool:
@@ -108,7 +131,9 @@ def _is_article_id(id_str: str) -> bool:
 async def get_book_by_isbn(isbn: str):
     """
     Look up a book by ISBN or an article by id (article-<uuid>).
-    For ISBN: uses MongoDB cache when MONGODB_URI is set; otherwise calls Google Books.
+    For ISBN: always fetches fresh data from Google Books (primary source) and patches
+    the page count from Open Library when Google reports 0 or None. Metadata is saved
+    to MongoDB without overwriting user-specific reading data.
     For article id: returns from DB only.
     """
     if _is_article_id(isbn):
@@ -121,21 +146,27 @@ async def get_book_by_isbn(isbn: str):
     if not isbn or not isbn.isdigit():
         raise HTTPException(status_code=400, detail="Invalid ISBN: must contain only digits (and optional spaces/dashes)")
 
-    # Return from cache when DB is enabled (integration tests do not set MONGODB_URI)
-    if db.is_db_enabled():
-        cached = await db.get_book_by_isbn(isbn)
-        if cached is not None:
-            await db.touch_book_last_looked_up(isbn)
-            return cached.model_dump(mode="json")
-
     headers = {"User-Agent": "BookLog/1.0 (https://github.com/your-org/books)"}
     async with httpx.AsyncClient(follow_redirects=True, headers=headers) as client:
         gb_item = await _fetch_google_books_by_isbn(client, isbn)
         if gb_item is None:
+            # Google Books has no result — return stored metadata if we have it
+            if db.is_db_enabled():
+                stored = await db.get_book_by_isbn(isbn)
+                if stored is not None:
+                    return stored.model_dump(mode="json")
             raise HTTPException(status_code=404, detail="Book not found for this ISBN")
+
         result = _book_from_google_books(gb_item, isbn)
+
+        # Patch missing page count from Open Library when Google Books reports 0 or None
+        if not result["number_of_pages"]:
+            ol_pages = await _fetch_open_library_page_count(client, isbn)
+            if ol_pages:
+                result["number_of_pages"] = ol_pages
+
         if db.is_db_enabled():
-            await db.save_book(BookResponse(**result))
+            await db.save_book_metadata(BookResponse(**result))
         return result
 
 

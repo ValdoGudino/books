@@ -21,6 +21,7 @@ const {
     isArticle,
     isPoem,
     lookup,
+    refreshMetadata,
     lookupFromHistory,
     addToBacklog,
     startReadingFromLookup,
@@ -60,16 +61,26 @@ const {
                     <p v-if="book.authors?.length" class="meta">
                         <span class="meta-label">Authors</span> {{ book.authors.join(", ") }}
                     </p>
+                    <p v-if="book.publishers?.length" class="meta">
+                        <span class="meta-label">Publishers</span> {{ book.publishers.join(", ") }}
+                    </p>
                     <p v-if="book.publish_date" class="meta">
                         <span class="meta-label">Published</span> {{ book.publish_date }}
                     </p>
                     <p v-if="book.number_of_pages" class="meta">
                         <span class="meta-label">Pages</span> {{ book.number_of_pages }}
                     </p>
+                    <p v-if="book.subjects?.length" class="meta">
+                        <span class="meta-label">Subjects</span> {{ book.subjects.join(", ") }}
+                    </p>
+                    <p v-if="book.description" class="meta meta-description">
+                        <span class="meta-label">Description</span> {{ book.description }}
+                    </p>
                     <div class="book-actions">
                         <button type="button" class="btn btn-secondary" @click="addToBacklog">Add to backlog</button>
                         <button type="button" class="btn btn-secondary" @click="startReadingFromLookup">Start reading</button>
                         <button type="button" class="btn btn-secondary" @click="markFinishedFromLookup">Mark as finished</button>
+                        <button type="button" class="btn btn-ghost" :disabled="loading" @click="refreshMetadata">Refresh metadata</button>
                     </div>
                 </div>
             </div>
@@ -164,5 +175,10 @@ const {
 <style scoped>
 .page-content {
     max-width: 600px;
+}
+.meta-description {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
 }
 </style>
