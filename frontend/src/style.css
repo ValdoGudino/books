@@ -513,23 +513,6 @@ button.calendar-cell.calendar-cell--active:hover {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  max-height: 400px;
-  overflow-y: auto;
-  padding-right: 0.5rem;
-}
-.backlog-list::-webkit-scrollbar {
-  width: 6px;
-}
-.backlog-list::-webkit-scrollbar-track {
-  background: var(--bg);
-  border-radius: 3px;
-}
-.backlog-list::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 3px;
-}
-.backlog-list::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-dim);
 }
 .backlog-item {
   display: flex;
