@@ -1,8 +1,10 @@
 <script setup>
-import { onMounted } from "vue";
+import { ref, watch, onMounted, onUnmounted } from "vue";
+import { useRouter, useRoute } from "vue-router";
 import { useBookLog } from "./composables/useBookLog";
 
 const {
+    book,
     editBookForEdit,
     finishDate,
     showFinishModal,
@@ -12,12 +14,46 @@ const {
     closeEditModal,
     viewBookItem,
     closeViewModal,
+    clearBook,
     init,
 } = useBookLog();
 
+const descExpanded = ref(false);
+watch(viewBookItem, () => { descExpanded.value = false; });
+
+const router = useRouter();
+const route = useRoute();
+const navRoutes = ["/", "/backlog", "/read", "/stats", "/lookup"];
+
+function handleGlobalKeydown(e) {
+    if (e.key === "Escape") {
+        if (editBookForEdit.value) { closeEditModal(); return; }
+        if (viewBookItem.value) { closeViewModal(); return; }
+        if (showFinishModal.value) { closeFinishModal(); return; }
+        if (book.value) { clearBook(); return; }
+        return;
+    }
+
+    // Don't steal arrow keys from inputs/textareas
+    const tag = e.target.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+    if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+        // Don't navigate while a modal is open
+        if (editBookForEdit.value || viewBookItem.value || showFinishModal.value) return;
+        e.preventDefault();
+        const current = navRoutes.indexOf(route.path);
+        if (current === -1) return;
+        const delta = e.key === "ArrowRight" ? 1 : -1;
+        router.push(navRoutes[(current + delta + navRoutes.length) % navRoutes.length]);
+    }
+}
+
 onMounted(() => {
     init();
+    document.addEventListener("keydown", handleGlobalKeydown);
 });
+onUnmounted(() => document.removeEventListener("keydown", handleGlobalKeydown));
 </script>
 
 <template>
@@ -82,6 +118,9 @@ onMounted(() => {
                     class="view-modal-cover"
                 />
                 <div class="view-modal-details">
+                    <p v-if="viewBookItem.isbn && (!viewBookItem.entry_type || viewBookItem.entry_type === 'book')" class="meta">
+                        <span class="meta-label">ISBN</span>{{ viewBookItem.isbn }}
+                    </p>
                     <p v-if="viewBookItem.authors?.length" class="meta">
                         <span class="meta-label">Authors</span>{{ viewBookItem.authors.join(", ") }}
                     </p>
@@ -97,9 +136,13 @@ onMounted(() => {
                     <p v-if="viewBookItem.subjects?.length" class="meta">
                         <span class="meta-label">Subjects</span>{{ viewBookItem.subjects.join(", ") }}
                     </p>
-                    <p v-if="viewBookItem.description" class="meta view-modal-description">
-                        <span class="meta-label">Description</span>{{ viewBookItem.description }}
-                    </p>
+                    <div v-if="viewBookItem.description" class="meta view-modal-description">
+                        <span class="meta-label">Description</span>
+                        <span :class="{ 'description-collapsed': !descExpanded }">{{ viewBookItem.description }}</span>
+                        <button v-if="viewBookItem.description.length > 150" type="button" class="desc-toggle" @click="descExpanded = !descExpanded">
+                            {{ descExpanded ? 'Show less' : 'Show more' }}
+                        </button>
+                    </div>
                 </div>
             </div>
             <div class="modal-actions">

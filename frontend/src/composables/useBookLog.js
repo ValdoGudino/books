@@ -808,6 +808,10 @@ export function useBookLog() {
         viewBookItem.value = null;
     }
 
+    function clearBook() {
+        book.value = null;
+    }
+
     function init() {
         loadHistory();
         refreshReadingLog();
@@ -899,6 +903,7 @@ export function useBookLog() {
         viewBookItem,
         openViewModal,
         closeViewModal,
+        clearBook,
         init,
     };
 }

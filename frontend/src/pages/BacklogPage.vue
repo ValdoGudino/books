@@ -1,5 +1,5 @@
 <script setup>
-import { ref } from "vue";
+import { ref, onMounted, onUnmounted } from "vue";
 import { useBookLog } from "../composables/useBookLog";
 
 const {
@@ -20,6 +20,7 @@ const {
 
 const vFocus = { mounted: (el) => { el.focus(); el.select(); } };
 
+// ── position-jump editing ─────────────────────────────────────────────────────
 const editingPosIsbn = ref(null);
 const editingPosValue = ref(1);
 const posEditEscaped = ref(false);
@@ -45,6 +46,38 @@ async function applyPosEdit(isbnVal, sectionType) {
     if (pos == null || !Number.isFinite(pos) || !Number.isInteger(pos)) return;
     await moveBacklogItemToPosition(isbnVal, sectionType, pos);
 }
+
+// ── keyboard-selection reordering ────────────────────────────────────────────
+const selectedIsbn = ref(null);
+const selectedSectionType = ref(null);
+
+function selectItem(isbnVal, sectionType) {
+    selectedIsbn.value = isbnVal;
+    selectedSectionType.value = sectionType;
+}
+
+async function clickReorder(isbnVal, sectionType, direction) {
+    selectedIsbn.value = isbnVal;
+    selectedSectionType.value = sectionType;
+    await moveBacklogItem(isbnVal, sectionType, direction);
+}
+
+async function handleKeydown(e) {
+    if (!selectedIsbn.value) return;
+    if (e.key === "ArrowUp") {
+        e.preventDefault();
+        await moveBacklogItem(selectedIsbn.value, selectedSectionType.value, "up");
+    } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        await moveBacklogItem(selectedIsbn.value, selectedSectionType.value, "down");
+    } else if (e.key === "Escape") {
+        selectedIsbn.value = null;
+        selectedSectionType.value = null;
+    }
+}
+
+onMounted(() => document.addEventListener("keydown", handleKeydown));
+onUnmounted(() => document.removeEventListener("keydown", handleKeydown));
 </script>
 
 <template>
@@ -52,7 +85,7 @@ async function applyPosEdit(isbnVal, sectionType) {
         <section v-if="backlogBooks.length || backlogArticles.length || backlogPoems.length" class="backlog">
             <h2 class="section-title">
                 Backlog
-                <span class="hint">(drag, use ↑↓, or click the number to reorder within each group)</span>
+                <span class="hint">(drag or ↑↓ to reorder; click # for position; click item to select for arrow keys)</span>
             </h2>
             <template v-if="backlogBooks.length">
                 <h3 class="subsection-title">Books</h3>
@@ -61,11 +94,12 @@ async function applyPosEdit(isbnVal, sectionType) {
                         v-for="(item, index) in backlogBooks"
                         :key="item.isbn"
                         class="backlog-item card-clickable"
+                        :class="{ 'backlog-item-selected': selectedIsbn === item.isbn }"
                         draggable="true"
                         @dragstart="onBacklogDragStart($event, item)"
                         @dragover="onBacklogDragOver"
                         @drop="onBacklogDrop($event, 'book', index)"
-                        @click="openViewModal(item)"
+                        @click="selectItem(item.isbn, 'book')"
                     >
                         <span class="backlog-pos" :class="{ 'backlog-pos-editing': editingPosIsbn === item.isbn }" @click.stop="startPosEdit(item.isbn, index + 1)">
                             <input
@@ -83,15 +117,16 @@ async function applyPosEdit(isbnVal, sectionType) {
                             />
                             <template v-else>{{ index + 1 }}</template>
                         </span>
-                        <img v-if="item.cover_url" :src="item.cover_url" :alt="item.title" class="list-cover" />
-                        <div class="list-info">
+                        <img v-if="item.cover_url" :src="item.cover_url" :alt="item.title" class="list-cover" @click.stop="openViewModal(item)" />
+                        <div class="list-info" @click.stop="openViewModal(item)">
                             <span class="list-title">{{ item.title }}</span>
                             <span v-if="item.authors?.length" class="list-authors">{{ item.authors.join(", ") }}</span>
                             <span v-if="item.backlog_date" class="list-date">Added {{ formatDate(item.backlog_date) }}</span>
                         </div>
+                        <div class="list-spacer"></div>
                         <div class="reorder-btns">
-                            <button type="button" class="btn-reorder" :disabled="index === 0" title="Move up" @click.stop="moveBacklogItem(item.isbn, 'book', 'up')">↑</button>
-                            <button type="button" class="btn-reorder" :disabled="index === backlogBooks.length - 1" title="Move down" @click.stop="moveBacklogItem(item.isbn, 'book', 'down')">↓</button>
+                            <button type="button" class="btn-reorder" :disabled="index === 0" title="Move up" @click.stop="clickReorder(item.isbn, 'book', 'up')">↑</button>
+                            <button type="button" class="btn-reorder" :disabled="index === backlogBooks.length - 1" title="Move down" @click.stop="clickReorder(item.isbn, 'book', 'down')">↓</button>
                         </div>
                         <div class="list-actions">
                             <button type="button" class="btn-small" @click.stop="startReading(item.isbn)">Start reading</button>
@@ -108,11 +143,12 @@ async function applyPosEdit(isbnVal, sectionType) {
                         v-for="(item, index) in backlogArticles"
                         :key="item.isbn"
                         class="backlog-item card-clickable"
+                        :class="{ 'backlog-item-selected': selectedIsbn === item.isbn }"
                         draggable="true"
                         @dragstart="onBacklogDragStart($event, item)"
                         @dragover="onBacklogDragOver"
                         @drop="onBacklogDrop($event, 'article', index)"
-                        @click="openViewModal(item)"
+                        @click="selectItem(item.isbn, 'article')"
                     >
                         <span class="backlog-pos" :class="{ 'backlog-pos-editing': editingPosIsbn === item.isbn }" @click.stop="startPosEdit(item.isbn, index + 1)">
                             <input
@@ -130,16 +166,17 @@ async function applyPosEdit(isbnVal, sectionType) {
                             />
                             <template v-else>{{ index + 1 }}</template>
                         </span>
-                        <img v-if="item.cover_url" :src="item.cover_url" :alt="item.title" class="list-cover" />
-                        <div class="list-info">
+                        <img v-if="item.cover_url" :src="item.cover_url" :alt="item.title" class="list-cover" @click.stop="openViewModal(item)" />
+                        <div class="list-info" @click.stop="openViewModal(item)">
                             <span class="list-title">{{ item.title }}</span>
                             <span class="badge badge-article">Article</span>
                             <span v-if="item.authors?.length" class="list-authors">{{ item.authors.join(", ") }}</span>
                             <span v-if="item.backlog_date" class="list-date">Added {{ formatDate(item.backlog_date) }}</span>
                         </div>
+                        <div class="list-spacer"></div>
                         <div class="reorder-btns">
-                            <button type="button" class="btn-reorder" :disabled="index === 0" title="Move up" @click.stop="moveBacklogItem(item.isbn, 'article', 'up')">↑</button>
-                            <button type="button" class="btn-reorder" :disabled="index === backlogArticles.length - 1" title="Move down" @click.stop="moveBacklogItem(item.isbn, 'article', 'down')">↓</button>
+                            <button type="button" class="btn-reorder" :disabled="index === 0" title="Move up" @click.stop="clickReorder(item.isbn, 'article', 'up')">↑</button>
+                            <button type="button" class="btn-reorder" :disabled="index === backlogArticles.length - 1" title="Move down" @click.stop="clickReorder(item.isbn, 'article', 'down')">↓</button>
                         </div>
                         <div class="list-actions">
                             <button type="button" class="btn-small" @click.stop="startReading(item.isbn)">Start reading</button>
@@ -156,11 +193,12 @@ async function applyPosEdit(isbnVal, sectionType) {
                         v-for="(item, index) in backlogPoems"
                         :key="item.isbn"
                         class="backlog-item card-clickable"
+                        :class="{ 'backlog-item-selected': selectedIsbn === item.isbn }"
                         draggable="true"
                         @dragstart="onBacklogDragStart($event, item)"
                         @dragover="onBacklogDragOver"
                         @drop="onBacklogDrop($event, 'poem', index)"
-                        @click="openViewModal(item)"
+                        @click="selectItem(item.isbn, 'poem')"
                     >
                         <span class="backlog-pos" :class="{ 'backlog-pos-editing': editingPosIsbn === item.isbn }" @click.stop="startPosEdit(item.isbn, index + 1)">
                             <input
@@ -178,16 +216,17 @@ async function applyPosEdit(isbnVal, sectionType) {
                             />
                             <template v-else>{{ index + 1 }}</template>
                         </span>
-                        <img v-if="item.cover_url" :src="item.cover_url" :alt="item.title" class="list-cover" />
-                        <div class="list-info">
+                        <img v-if="item.cover_url" :src="item.cover_url" :alt="item.title" class="list-cover" @click.stop="openViewModal(item)" />
+                        <div class="list-info" @click.stop="openViewModal(item)">
                             <span class="list-title">{{ item.title }}</span>
                             <span class="badge badge-poem">Poem</span>
                             <span v-if="item.authors?.length" class="list-authors">{{ item.authors.join(", ") }}</span>
                             <span v-if="item.backlog_date" class="list-date">Added {{ formatDate(item.backlog_date) }}</span>
                         </div>
+                        <div class="list-spacer"></div>
                         <div class="reorder-btns">
-                            <button type="button" class="btn-reorder" :disabled="index === 0" title="Move up" @click.stop="moveBacklogItem(item.isbn, 'poem', 'up')">↑</button>
-                            <button type="button" class="btn-reorder" :disabled="index === backlogPoems.length - 1" title="Move down" @click.stop="moveBacklogItem(item.isbn, 'poem', 'down')">↓</button>
+                            <button type="button" class="btn-reorder" :disabled="index === 0" title="Move up" @click.stop="clickReorder(item.isbn, 'poem', 'up')">↑</button>
+                            <button type="button" class="btn-reorder" :disabled="index === backlogPoems.length - 1" title="Move down" @click.stop="clickReorder(item.isbn, 'poem', 'down')">↓</button>
                         </div>
                         <div class="list-actions">
                             <button type="button" class="btn-small" @click.stop="startReading(item.isbn)">Start reading</button>
@@ -212,6 +251,22 @@ async function applyPosEdit(isbnVal, sectionType) {
 }
 .muted-para a {
     color: var(--accent);
+}
+.backlog-item {
+    cursor: pointer;
+}
+/* Override global flex:1 so the info area only covers its text content.
+   The spacer div next to it absorbs the remaining row space. */
+.list-info {
+    flex: none;
+}
+.list-spacer {
+    flex: 1;
+}
+.backlog-item-selected {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+    border-radius: 6px;
 }
 .backlog-pos {
     font-size: 0.75rem;

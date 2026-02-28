@@ -1,4 +1,5 @@
 <script setup>
+import { ref, watch } from "vue";
 import { useBookLog } from "../composables/useBookLog";
 
 const {
@@ -35,7 +36,11 @@ const {
     markFinishedFromLookup,
     submitArticle,
     submitPoem,
+    clearBook,
 } = useBookLog();
+
+const bookDescExpanded = ref(false);
+watch(book, () => { bookDescExpanded.value = false; });
 </script>
 
 <template>
@@ -119,40 +124,6 @@ const {
                 </div>
             </li>
         </ul>
-        <article v-if="book" class="book">
-            <div class="book-layout">
-                <div v-if="book.cover_url" class="cover-wrap">
-                    <img :src="book.cover_url" :alt="book.title" class="cover" />
-                </div>
-                <div class="details">
-                    <h2 class="book-title">{{ book.title }}</h2>
-                    <p v-if="book.authors?.length" class="meta">
-                        <span class="meta-label">Authors</span> {{ book.authors.join(", ") }}
-                    </p>
-                    <p v-if="book.publishers?.length" class="meta">
-                        <span class="meta-label">Publishers</span> {{ book.publishers.join(", ") }}
-                    </p>
-                    <p v-if="book.publish_date" class="meta">
-                        <span class="meta-label">Published</span> {{ book.publish_date }}
-                    </p>
-                    <p v-if="book.number_of_pages" class="meta">
-                        <span class="meta-label">Pages</span> {{ book.number_of_pages }}
-                    </p>
-                    <p v-if="book.subjects?.length" class="meta">
-                        <span class="meta-label">Subjects</span> {{ book.subjects.join(", ") }}
-                    </p>
-                    <p v-if="book.description" class="meta meta-description">
-                        <span class="meta-label">Description</span> {{ book.description }}
-                    </p>
-                    <div class="book-actions">
-                        <button type="button" class="btn btn-secondary" @click="addToBacklog">Add to backlog</button>
-                        <button type="button" class="btn btn-secondary" @click="startReadingFromLookup">Start reading</button>
-                        <button type="button" class="btn btn-secondary" @click="markFinishedFromLookup">Mark as finished</button>
-                        <button type="button" class="btn btn-ghost" :disabled="loading" @click="refreshMetadata">Refresh metadata</button>
-                    </div>
-                </div>
-            </div>
-        </article>
 
         <section class="add-shortform">
             <button type="button" class="btn btn-secondary" @click="showArticleForm = !showArticleForm">
@@ -238,6 +209,41 @@ const {
             </ul>
         </section>
     </div>
+
+    <Teleport to="body">
+        <div v-if="book" class="modal-overlay" @click.self="clearBook">
+            <div class="modal modal-wide">
+                <h3 class="modal-title">{{ book.title }}</h3>
+                <div class="view-modal-body">
+                    <img v-if="book.cover_url" :src="book.cover_url" :alt="book.title" class="view-modal-cover" />
+                    <div class="view-modal-details">
+                        <p v-if="book.isbn" class="meta"><span class="meta-label">ISBN</span> {{ book.isbn }}</p>
+                        <p v-if="book.authors?.length" class="meta"><span class="meta-label">Authors</span> {{ book.authors.join(", ") }}</p>
+                        <p v-if="book.publishers?.length" class="meta"><span class="meta-label">Publishers</span> {{ book.publishers.join(", ") }}</p>
+                        <p v-if="book.publish_date" class="meta"><span class="meta-label">Published</span> {{ book.publish_date }}</p>
+                        <p v-if="book.number_of_pages" class="meta"><span class="meta-label">Pages</span> {{ book.number_of_pages }}</p>
+                        <p v-if="book.subjects?.length" class="meta"><span class="meta-label">Subjects</span> {{ book.subjects.join(", ") }}</p>
+                        <div v-if="book.description" class="meta meta-description">
+                            <span class="meta-label">Description</span>
+                            <span :class="{ 'description-collapsed': !bookDescExpanded }">{{ book.description }}</span>
+                            <button v-if="book.description.length > 150" type="button" class="desc-toggle" @click="bookDescExpanded = !bookDescExpanded">
+                                {{ bookDescExpanded ? 'Show less' : 'Show more' }}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="book-actions">
+                    <button type="button" class="btn btn-secondary" @click="addToBacklog">Add to backlog</button>
+                    <button type="button" class="btn btn-secondary" @click="startReadingFromLookup">Start reading</button>
+                    <button type="button" class="btn btn-secondary" @click="markFinishedFromLookup">Mark as finished</button>
+                    <button type="button" class="btn btn-ghost" :disabled="loading" @click="refreshMetadata">Refresh metadata</button>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" @click="clearBook">Close</button>
+                </div>
+            </div>
+        </div>
+    </Teleport>
 </template>
 
 <style scoped>
