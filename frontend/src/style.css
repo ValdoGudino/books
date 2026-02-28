@@ -716,6 +716,8 @@ button.calendar-cell.calendar-cell--active:hover {
   padding: 1.5rem;
   max-width: 24rem;
   width: 100%;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
 }
 .modal-wide {
   max-width: 28rem;
