@@ -1,4 +1,5 @@
 # Book Log
+<img width="1420" height="494" alt="Screenshot 2026-02-27 at 9 44 33 PM" src="https://github.com/user-attachments/assets/dd04a06a-6fbf-4e6e-be74-9c135f43339e" />
 
 A personal reading tracker. Look up books by ISBN, maintain a backlog, track reading progress, and log what you've finished.
 
