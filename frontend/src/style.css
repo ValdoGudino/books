@@ -739,6 +739,44 @@ button.calendar-cell.calendar-cell--active:hover {
   flex-direction: column;
   gap: 0.75rem;
 }
+.card-clickable {
+  cursor: pointer;
+}
+.card-clickable:hover {
+  background: var(--surface-hover, rgba(255,255,255,0.04));
+}
+.month-finished-cover {
+  width: 36px;
+  flex-shrink: 0;
+  border-radius: 3px;
+}
+.month-finished-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  flex: 1;
+  min-width: 0;
+}
+.view-modal-body {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+.view-modal-cover {
+  width: 80px;
+  flex-shrink: 0;
+  border-radius: 4px;
+}
+.view-modal-details {
+  flex: 1;
+  min-width: 0;
+}
+.view-modal-description {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
 .edit-form .input {
   flex: none;
 }

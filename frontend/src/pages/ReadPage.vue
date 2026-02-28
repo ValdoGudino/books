@@ -8,6 +8,7 @@ const {
     formatDate,
     openEdit,
     deleteFromRead,
+    openViewModal,
 } = useBookLog();
 </script>
 
@@ -18,22 +19,22 @@ const {
             <template v-if="finishedBooks.length">
                 <h3 class="subsection-title">Books</h3>
                 <ul class="finished-list">
-                    <li v-for="item in finishedBooks" :key="item.isbn" class="finished-item">
+                    <li v-for="item in finishedBooks" :key="item.isbn" class="finished-item card-clickable" @click="openViewModal(item)">
                         <img v-if="item.cover_url" :src="item.cover_url" :alt="item.title" class="list-cover" />
                         <div class="list-info">
                             <span class="list-title">{{ item.title }}</span>
                             <span v-if="item.authors?.length" class="list-authors">{{ item.authors.join(", ") }}</span>
                             <span v-if="item.finished_date" class="finished-date">Finished {{ formatDate(item.finished_date) }}</span>
                         </div>
-                        <button type="button" class="btn-small btn-ghost" @click="openEdit(item)">Edit</button>
-                        <button type="button" class="btn-small btn-ghost btn-danger" title="Remove from Read and clear history" @click="deleteFromRead(item.isbn)">Delete</button>
+                        <button type="button" class="btn-small btn-ghost" @click.stop="openEdit(item)">Edit</button>
+                        <button type="button" class="btn-small btn-ghost btn-danger" title="Remove from Read and clear history" @click.stop="deleteFromRead(item.isbn)">Delete</button>
                     </li>
                 </ul>
             </template>
             <template v-if="finishedArticles.length">
                 <h3 class="subsection-title">Articles</h3>
                 <ul class="finished-list">
-                    <li v-for="item in finishedArticles" :key="item.isbn" class="finished-item">
+                    <li v-for="item in finishedArticles" :key="item.isbn" class="finished-item card-clickable" @click="openViewModal(item)">
                         <img v-if="item.cover_url" :src="item.cover_url" :alt="item.title" class="list-cover" />
                         <div class="list-info">
                             <span class="list-title">{{ item.title }}</span>
@@ -41,15 +42,15 @@ const {
                             <span v-if="item.authors?.length" class="list-authors">{{ item.authors.join(", ") }}</span>
                             <span v-if="item.finished_date" class="finished-date">Finished {{ formatDate(item.finished_date) }}</span>
                         </div>
-                        <button type="button" class="btn-small btn-ghost" @click="openEdit(item)">Edit</button>
-                        <button type="button" class="btn-small btn-ghost btn-danger" title="Remove from Read and clear history" @click="deleteFromRead(item.isbn)">Delete</button>
+                        <button type="button" class="btn-small btn-ghost" @click.stop="openEdit(item)">Edit</button>
+                        <button type="button" class="btn-small btn-ghost btn-danger" title="Remove from Read and clear history" @click.stop="deleteFromRead(item.isbn)">Delete</button>
                     </li>
                 </ul>
             </template>
             <template v-if="finishedPoems.length">
                 <h3 class="subsection-title">Poems</h3>
                 <ul class="finished-list">
-                    <li v-for="item in finishedPoems" :key="item.isbn" class="finished-item">
+                    <li v-for="item in finishedPoems" :key="item.isbn" class="finished-item card-clickable" @click="openViewModal(item)">
                         <img v-if="item.cover_url" :src="item.cover_url" :alt="item.title" class="list-cover" />
                         <div class="list-info">
                             <span class="list-title">{{ item.title }}</span>
@@ -57,8 +58,8 @@ const {
                             <span v-if="item.authors?.length" class="list-authors">{{ item.authors.join(", ") }}</span>
                             <span v-if="item.finished_date" class="finished-date">Finished {{ formatDate(item.finished_date) }}</span>
                         </div>
-                        <button type="button" class="btn-small btn-ghost" @click="openEdit(item)">Edit</button>
-                        <button type="button" class="btn-small btn-ghost btn-danger" title="Remove from Read and clear history" @click="deleteFromRead(item.isbn)">Delete</button>
+                        <button type="button" class="btn-small btn-ghost" @click.stop="openEdit(item)">Edit</button>
+                        <button type="button" class="btn-small btn-ghost btn-danger" title="Remove from Read and clear history" @click.stop="deleteFromRead(item.isbn)">Delete</button>
                     </li>
                 </ul>
             </template>

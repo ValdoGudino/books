@@ -25,6 +25,7 @@ const {
     loadMonthSummary,
     isArticle,
     isPoem,
+    openViewModal,
 } = useBookLog();
 
 const isCurrentMonth = computed(() => {
@@ -101,11 +102,14 @@ onMounted(() => {
                     · <strong>{{ monthSummary.items_finished.length }}</strong> item{{ monthSummary.items_finished.length === 1 ? "" : "s" }} finished
                 </p>
                 <ul v-if="monthSummary.items_finished.length" class="month-finished-list">
-                    <li v-for="item in monthSummary.items_finished" :key="item.isbn" class="month-finished-item">
-                        <span class="list-title">{{ item.title }}</span>
-                        <span v-if="isArticle(item)" class="badge badge-article">Article</span>
-                        <span v-else-if="isPoem(item)" class="badge badge-poem">Poem</span>
-                        <span v-if="item.finished_date" class="list-date">Finished {{ formatDate(item.finished_date) }}</span>
+                    <li v-for="item in monthSummary.items_finished" :key="item.isbn" class="month-finished-item card-clickable" @click="openViewModal(item)">
+                        <img v-if="item.cover_url" :src="item.cover_url" :alt="item.title" class="month-finished-cover" />
+                        <div class="month-finished-info">
+                            <span class="list-title">{{ item.title }}</span>
+                            <span v-if="isArticle(item)" class="badge badge-article">Article</span>
+                            <span v-else-if="isPoem(item)" class="badge badge-poem">Poem</span>
+                            <span v-if="item.finished_date" class="list-date">Finished {{ formatDate(item.finished_date) }}</span>
+                        </div>
                     </li>
                 </ul>
             </section>
@@ -121,7 +125,8 @@ onMounted(() => {
                     <li
                         v-for="item in inProgressBooks"
                         :key="item.isbn"
-                        class="progress-item"
+                        class="progress-item card-clickable"
+                        @click="openViewModal(item)"
                     >
                         <img
                             v-if="item.cover_url"
@@ -134,7 +139,7 @@ onMounted(() => {
                             <span v-if="item.authors?.length" class="list-authors">{{ item.authors.join(", ") }}</span>
                             <span v-if="item.started_date" class="list-date">Started {{ formatDate(item.started_date) }}</span>
                             <span v-if="item.last_progress_date" class="list-date">Last updated {{ formatDate(item.last_progress_date) }}</span>
-                            <div class="progress-bar-wrap">
+                            <div class="progress-bar-wrap" @click.stop>
                                 <input
                                     type="text"
                                     inputmode="numeric"
@@ -151,9 +156,9 @@ onMounted(() => {
                             </div>
                         </div>
                         <div class="list-actions">
-                            <button type="button" class="btn-small" @click="openFinishModal(item.isbn)">Mark finished</button>
-                            <button type="button" class="btn-small btn-ghost" @click="openEdit(item)">Edit</button>
-                            <button type="button" class="btn-small btn-ghost" title="Remove from list (keeps pages read)" @click="removeFromList(item.isbn)">Remove</button>
+                            <button type="button" class="btn-small" @click.stop="openFinishModal(item.isbn)">Mark finished</button>
+                            <button type="button" class="btn-small btn-ghost" @click.stop="openEdit(item)">Edit</button>
+                            <button type="button" class="btn-small btn-ghost" title="Remove from list (keeps pages read)" @click.stop="removeFromList(item.isbn)">Remove</button>
                         </div>
                     </li>
                 </ul>
@@ -164,7 +169,8 @@ onMounted(() => {
                     <li
                         v-for="item in inProgressArticles"
                         :key="item.isbn"
-                        class="progress-item"
+                        class="progress-item card-clickable"
+                        @click="openViewModal(item)"
                     >
                         <img v-if="item.cover_url" :src="item.cover_url" :alt="item.title" class="list-cover" />
                         <div class="list-info">
@@ -173,7 +179,7 @@ onMounted(() => {
                             <span v-if="item.authors?.length" class="list-authors">{{ item.authors.join(", ") }}</span>
                             <span v-if="item.started_date" class="list-date">Started {{ formatDate(item.started_date) }}</span>
                             <span v-if="item.last_progress_date" class="list-date">Last updated {{ formatDate(item.last_progress_date) }}</span>
-                            <div class="progress-bar-wrap">
+                            <div class="progress-bar-wrap" @click.stop>
                                 <input
                                     type="text"
                                     inputmode="numeric"
@@ -190,9 +196,9 @@ onMounted(() => {
                             </div>
                         </div>
                         <div class="list-actions">
-                            <button type="button" class="btn-small" @click="openFinishModal(item.isbn)">Mark finished</button>
-                            <button type="button" class="btn-small btn-ghost" @click="openEdit(item)">Edit</button>
-                            <button type="button" class="btn-small btn-ghost" title="Remove from list (keeps pages read)" @click="removeFromList(item.isbn)">Remove</button>
+                            <button type="button" class="btn-small" @click.stop="openFinishModal(item.isbn)">Mark finished</button>
+                            <button type="button" class="btn-small btn-ghost" @click.stop="openEdit(item)">Edit</button>
+                            <button type="button" class="btn-small btn-ghost" title="Remove from list (keeps pages read)" @click.stop="removeFromList(item.isbn)">Remove</button>
                         </div>
                     </li>
                 </ul>
@@ -203,7 +209,8 @@ onMounted(() => {
                     <li
                         v-for="item in inProgressPoems"
                         :key="item.isbn"
-                        class="progress-item"
+                        class="progress-item card-clickable"
+                        @click="openViewModal(item)"
                     >
                         <img v-if="item.cover_url" :src="item.cover_url" :alt="item.title" class="list-cover" />
                         <div class="list-info">
@@ -212,7 +219,7 @@ onMounted(() => {
                             <span v-if="item.authors?.length" class="list-authors">{{ item.authors.join(", ") }}</span>
                             <span v-if="item.started_date" class="list-date">Started {{ formatDate(item.started_date) }}</span>
                             <span v-if="item.last_progress_date" class="list-date">Last updated {{ formatDate(item.last_progress_date) }}</span>
-                            <div class="progress-bar-wrap">
+                            <div class="progress-bar-wrap" @click.stop>
                                 <input
                                     type="text"
                                     inputmode="numeric"
@@ -229,9 +236,9 @@ onMounted(() => {
                             </div>
                         </div>
                         <div class="list-actions">
-                            <button type="button" class="btn-small" @click="openFinishModal(item.isbn)">Mark finished</button>
-                            <button type="button" class="btn-small btn-ghost" @click="openEdit(item)">Edit</button>
-                            <button type="button" class="btn-small btn-ghost" title="Remove from list (keeps pages read)" @click="removeFromList(item.isbn)">Remove</button>
+                            <button type="button" class="btn-small" @click.stop="openFinishModal(item.isbn)">Mark finished</button>
+                            <button type="button" class="btn-small btn-ghost" @click.stop="openEdit(item)">Edit</button>
+                            <button type="button" class="btn-small btn-ghost" title="Remove from list (keeps pages read)" @click.stop="removeFromList(item.isbn)">Remove</button>
                         </div>
                     </li>
                 </ul>
@@ -284,7 +291,9 @@ onMounted(() => {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
+    border-radius: 6px;
+    padding: 0.2rem 0.35rem;
 }
 .month-finished-item .list-title {
     font-weight: 500;

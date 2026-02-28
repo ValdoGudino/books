@@ -306,6 +306,9 @@ async def get_stats(as_of_date: date | None = None) -> dict:
         end_of_year = date(now.year, 12, 31)
     finished = await coll.find({"status": "finished"}).to_list(length=None)
     items_count = len(finished)
+    books_finished_count = sum(1 for doc in finished if not doc.get("entry_type") or doc.get("entry_type") == "book")
+    articles_finished_count = sum(1 for doc in finished if doc.get("entry_type") == "article")
+    poems_finished_count = sum(1 for doc in finished if doc.get("entry_type") == "poem")
     pages_from_finished_month = 0
     pages_from_finished_year = 0
     for doc in finished:
@@ -350,7 +353,9 @@ async def get_stats(as_of_date: date | None = None) -> dict:
         "pages_from_finished_this_year": pages_from_finished_year,
         "pages_recorded_this_month": pages_recorded_month,
         "pages_recorded_this_year": pages_recorded_year,
-        "books_finished_count": items_count,
+        "books_finished_count": books_finished_count,
+        "articles_finished_count": articles_finished_count,
+        "poems_finished_count": poems_finished_count,
         "items_finished_count": items_count,
     }
 

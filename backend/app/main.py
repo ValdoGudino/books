@@ -131,7 +131,8 @@ def _is_article_id(id_str: str) -> bool:
 async def get_book_by_isbn(isbn: str):
     """
     Look up a book by ISBN or an article by id (article-<uuid>).
-    For ISBN: always fetches fresh data from Google Books (primary source) and patches
+    For ISBN: checks MongoDB cache first; if found, returns cached data without calling
+    the external APIs. Otherwise fetches from Google Books (primary source) and patches
     the page count from Open Library when Google reports 0 or None. Metadata is saved
     to MongoDB without overwriting user-specific reading data.
     For article id: returns from DB only.
@@ -146,15 +147,16 @@ async def get_book_by_isbn(isbn: str):
     if not isbn or not isbn.isdigit():
         raise HTTPException(status_code=400, detail="Invalid ISBN: must contain only digits (and optional spaces/dashes)")
 
+    if db.is_db_enabled():
+        cached = await db.get_book_by_isbn(isbn)
+        if cached is not None:
+            await db.touch_book_last_looked_up(isbn)
+            return cached.model_dump(mode="json")
+
     headers = {"User-Agent": "BookLog/1.0 (https://github.com/your-org/books)"}
     async with httpx.AsyncClient(follow_redirects=True, headers=headers) as client:
         gb_item = await _fetch_google_books_by_isbn(client, isbn)
         if gb_item is None:
-            # Google Books has no result — return stored metadata if we have it
-            if db.is_db_enabled():
-                stored = await db.get_book_by_isbn(isbn)
-                if stored is not None:
-                    return stored.model_dump(mode="json")
             raise HTTPException(status_code=404, detail="Book not found for this ISBN")
 
         result = _book_from_google_books(gb_item, isbn)

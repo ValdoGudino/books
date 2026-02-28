@@ -10,8 +10,16 @@ const { stats } = useBookLog();
             <h2 class="section-title">Stats</h2>
             <div class="stats-grid">
                 <div class="stat">
-                    <span class="stat-value">{{ stats.items_finished_count ?? stats.books_finished_count }}</span>
-                    items read (finished)
+                    <span class="stat-value">{{ stats.books_finished_count ?? 0 }}</span>
+                    books read (finished)
+                </div>
+                <div class="stat">
+                    <span class="stat-value">{{ stats.articles_finished_count ?? 0 }}</span>
+                    articles read (finished)
+                </div>
+                <div class="stat">
+                    <span class="stat-value">{{ stats.poems_finished_count ?? 0 }}</span>
+                    poems read (finished)
                 </div>
                 <div class="stat">
                     <span class="stat-value">{{ stats.pages_from_finished_this_month ?? stats.pages_this_month }}</span>

@@ -48,6 +48,7 @@ const calendarMonth = ref(new Date().getMonth()); // 0-11
 const calendarYear = ref(new Date().getFullYear());
 const historyMinimized = ref(false);
 const monthSummary = ref({ pages_read: 0, pages_recorded: 0, items_finished: [], dates: [] });
+const viewBookItem = ref(null);
 
 export function useBookLog() {
     const canSubmit = computed(() => {
@@ -701,6 +702,14 @@ export function useBookLog() {
         editBookForEdit.value = null;
     }
 
+    function openViewModal(item) {
+        viewBookItem.value = item;
+    }
+
+    function closeViewModal() {
+        viewBookItem.value = null;
+    }
+
     function init() {
         loadHistory();
         refreshReadingLog();
@@ -780,6 +789,9 @@ export function useBookLog() {
         loadMonthSummary,
         closeFinishModal,
         closeEditModal,
+        viewBookItem,
+        openViewModal,
+        closeViewModal,
         init,
     };
 }

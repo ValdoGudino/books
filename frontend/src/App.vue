@@ -10,6 +10,8 @@ const {
     saveEdit,
     closeFinishModal,
     closeEditModal,
+    viewBookItem,
+    closeViewModal,
     init,
 } = useBookLog();
 
@@ -60,6 +62,48 @@ onMounted(() => {
                     Cancel
                 </button>
                 <button type="button" class="btn" @click="confirmMarkFinished">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- View info modal -->
+    <div
+        v-if="viewBookItem"
+        class="modal-overlay"
+        @click.self="closeViewModal"
+    >
+        <div class="modal modal-wide">
+            <h3 class="modal-title">{{ viewBookItem.title }}</h3>
+            <div class="view-modal-body">
+                <img
+                    v-if="viewBookItem.cover_url"
+                    :src="viewBookItem.cover_url"
+                    :alt="viewBookItem.title"
+                    class="view-modal-cover"
+                />
+                <div class="view-modal-details">
+                    <p v-if="viewBookItem.authors?.length" class="meta">
+                        <span class="meta-label">Authors</span>{{ viewBookItem.authors.join(", ") }}
+                    </p>
+                    <p v-if="viewBookItem.publishers?.length" class="meta">
+                        <span class="meta-label">Publishers</span>{{ viewBookItem.publishers.join(", ") }}
+                    </p>
+                    <p v-if="viewBookItem.publish_date" class="meta">
+                        <span class="meta-label">Published</span>{{ viewBookItem.publish_date }}
+                    </p>
+                    <p v-if="viewBookItem.number_of_pages" class="meta">
+                        <span class="meta-label">Pages</span>{{ viewBookItem.number_of_pages }}
+                    </p>
+                    <p v-if="viewBookItem.subjects?.length" class="meta">
+                        <span class="meta-label">Subjects</span>{{ viewBookItem.subjects.join(", ") }}
+                    </p>
+                    <p v-if="viewBookItem.description" class="meta view-modal-description">
+                        <span class="meta-label">Description</span>{{ viewBookItem.description }}
+                    </p>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" @click="closeViewModal">Close</button>
             </div>
         </div>
     </div>

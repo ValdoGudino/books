@@ -12,6 +12,7 @@ const {
     onBacklogDragStart,
     onBacklogDragOver,
     onBacklogDrop,
+    openViewModal,
 } = useBookLog();
 </script>
 
@@ -28,11 +29,12 @@ const {
                     <li
                         v-for="(item, index) in backlogBooks"
                         :key="item.isbn"
-                        class="backlog-item"
+                        class="backlog-item card-clickable"
                         draggable="true"
                         @dragstart="onBacklogDragStart($event, item)"
                         @dragover="onBacklogDragOver"
                         @drop="onBacklogDrop($event, 'book', index)"
+                        @click="openViewModal(item)"
                     >
                         <img v-if="item.cover_url" :src="item.cover_url" :alt="item.title" class="list-cover" />
                         <div class="list-info">
@@ -41,9 +43,9 @@ const {
                             <span v-if="item.backlog_date" class="list-date">Added {{ formatDate(item.backlog_date) }}</span>
                         </div>
                         <div class="list-actions">
-                            <button type="button" class="btn-small" @click="startReading(item.isbn)">Start reading</button>
-                            <button type="button" class="btn-small btn-ghost" @click="openEdit(item)">Edit</button>
-                            <button type="button" class="btn-small btn-ghost" title="Remove from list (keeps progress)" @click="removeFromList(item.isbn)">Remove</button>
+                            <button type="button" class="btn-small" @click.stop="startReading(item.isbn)">Start reading</button>
+                            <button type="button" class="btn-small btn-ghost" @click.stop="openEdit(item)">Edit</button>
+                            <button type="button" class="btn-small btn-ghost" title="Remove from list (keeps progress)" @click.stop="removeFromList(item.isbn)">Remove</button>
                         </div>
                     </li>
                 </ul>
@@ -54,11 +56,12 @@ const {
                     <li
                         v-for="(item, index) in backlogArticles"
                         :key="item.isbn"
-                        class="backlog-item"
+                        class="backlog-item card-clickable"
                         draggable="true"
                         @dragstart="onBacklogDragStart($event, item)"
                         @dragover="onBacklogDragOver"
                         @drop="onBacklogDrop($event, 'article', index)"
+                        @click="openViewModal(item)"
                     >
                         <img v-if="item.cover_url" :src="item.cover_url" :alt="item.title" class="list-cover" />
                         <div class="list-info">
@@ -68,9 +71,9 @@ const {
                             <span v-if="item.backlog_date" class="list-date">Added {{ formatDate(item.backlog_date) }}</span>
                         </div>
                         <div class="list-actions">
-                            <button type="button" class="btn-small" @click="startReading(item.isbn)">Start reading</button>
-                            <button type="button" class="btn-small btn-ghost" @click="openEdit(item)">Edit</button>
-                            <button type="button" class="btn-small btn-ghost" title="Remove from list (keeps progress)" @click="removeFromList(item.isbn)">Remove</button>
+                            <button type="button" class="btn-small" @click.stop="startReading(item.isbn)">Start reading</button>
+                            <button type="button" class="btn-small btn-ghost" @click.stop="openEdit(item)">Edit</button>
+                            <button type="button" class="btn-small btn-ghost" title="Remove from list (keeps progress)" @click.stop="removeFromList(item.isbn)">Remove</button>
                         </div>
                     </li>
                 </ul>
@@ -81,11 +84,12 @@ const {
                     <li
                         v-for="(item, index) in backlogPoems"
                         :key="item.isbn"
-                        class="backlog-item"
+                        class="backlog-item card-clickable"
                         draggable="true"
                         @dragstart="onBacklogDragStart($event, item)"
                         @dragover="onBacklogDragOver"
                         @drop="onBacklogDrop($event, 'poem', index)"
+                        @click="openViewModal(item)"
                     >
                         <img v-if="item.cover_url" :src="item.cover_url" :alt="item.title" class="list-cover" />
                         <div class="list-info">
@@ -95,9 +99,9 @@ const {
                             <span v-if="item.backlog_date" class="list-date">Added {{ formatDate(item.backlog_date) }}</span>
                         </div>
                         <div class="list-actions">
-                            <button type="button" class="btn-small" @click="startReading(item.isbn)">Start reading</button>
-                            <button type="button" class="btn-small btn-ghost" @click="openEdit(item)">Edit</button>
-                            <button type="button" class="btn-small btn-ghost" title="Remove from list (keeps progress)" @click="removeFromList(item.isbn)">Remove</button>
+                            <button type="button" class="btn-small" @click.stop="startReading(item.isbn)">Start reading</button>
+                            <button type="button" class="btn-small btn-ghost" @click.stop="openEdit(item)">Edit</button>
+                            <button type="button" class="btn-small btn-ghost" title="Remove from list (keeps progress)" @click.stop="removeFromList(item.isbn)">Remove</button>
                         </div>
                     </li>
                 </ul>
