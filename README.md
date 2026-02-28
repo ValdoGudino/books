@@ -1,13 +1,27 @@
 # Book Log
 
-A simple web app to look up books by ISBN. Enter an ISBN (10 or 13 digits) and see facts about the book from [Open Library](https://openlibrary.org).
+A personal reading tracker. Look up books by ISBN, maintain a backlog, track reading progress, and log what you've finished.
 
 - **Backend:** Python [FastAPI](https://fastapi.tiangolo.com/)
 - **Frontend:** [Vue 3](https://vuejs.org/) with [Vite](https://vitejs.dev/)
+- **Database:** MongoDB (optional — enables caching and the full reading log)
+- **Book data:** [Google Books API](https://developers.google.com/books) (primary), [Open Library](https://openlibrary.org) (page count fallback)
 
-## Setup
+---
 
-### Backend
+## Prerequisites
+
+- Python 3.11+
+- Node.js 18+
+- Docker & Docker Compose (optional, for MongoDB)
+
+---
+
+## Quick start (no database)
+
+Without MongoDB the app still works: every ISBN lookup hits Google Books live, and the reading log (backlog, in-progress, finished, stats) is unavailable.
+
+**1. Start the backend**
 
 ```bash
 cd backend
@@ -17,14 +31,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-**Secrets (direnv)** – To load env vars (e.g. `GOOGLE_BOOKS_API_KEY`) from a local file when you `cd backend`:
-
-1. Install [direnv](https://direnv.net/) and hook it into your shell.
-2. Copy `backend/.env.example` to `backend/.env` and add your values.
-3. From the repo root or from `backend`, run `direnv allow` in `backend` (or `cd backend` and `direnv allow`).
-4. After that, `cd backend` will load `.env` automatically; `cd ..` unloads it.
-
-### Frontend
+**2. Start the frontend** (in a separate terminal)
 
 ```bash
 cd frontend
@@ -32,61 +39,170 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). The Vite dev server proxies `/api` to the FastAPI backend on port 8000.
+Open [http://localhost:5173](http://localhost:5173). The Vite dev server proxies `/api` to the backend on port 8000.
 
-**Local MongoDB (optional)** – For cached lookups and search history:
+---
 
-1. Start MongoDB: `docker compose up -d` (from the repo root).
-2. Set `MONGODB_URI=mongodb://localhost:27017` in `backend/.env` (or via direnv).
-3. (Optional) Set `APP_TIMEZONE=America/Chicago` (or your timezone) so "today" and stats use your local date instead of UTC.
-4. Restart the backend. Looked-up books are stored by ISBN; repeat lookups are served from the DB without calling the APIs.
+## Full setup (with MongoDB and reading log)
 
-**Reading log (requires MongoDB):**
-- **Backlog** – Add books from a lookup; drag and drop to reorder. Move to “In progress” when you start reading.
-- **In progress** – Set current page and see progress; mark as finished with a date.
-- **Finished** – List of books you’ve finished with their finished date.
-- **Stats** – Pages read this month, pages read this year, and books finished count.
-- **Edit** – Edit any book (title, authors, publishers, pages, description, etc.) to fill in missing data from the APIs.
+MongoDB enables caching (repeat lookups skip the API) and the full reading log.
 
-If `MONGODB_URI` is not set, the app does not use a database: every lookup calls Open Library / Google Books, history returns an empty list, and backlog/in-progress/finished/stats are unavailable.
+**1. Start MongoDB**
 
-## Usage
+```bash
+docker compose up -d mongo
+```
 
-1. Enter a book ISBN (e.g. `9780140328721` or `0140328721`).
-2. Click **Look up**.
-3. View title, authors, cover, publisher, publish date, page count, subjects, and description.
+This starts a MongoDB 7 container and exposes it on `localhost:27017`. Data is persisted in a Docker volume (`mongo_data`).
 
-Book data is fetched from **Open Library** first; if a book isn’t found, **Google Books** is used as a fallback. Open Library requires no API key.
+**2. Configure the backend**
 
-**If Google Books blocks your requests** (e.g. 403 or no results), use an optional API key:
+Copy the example env file and edit it:
 
-1. In [Google Cloud Console](https://console.cloud.google.com/), create or select a project.
-2. Enable the [Books API](https://console.cloud.google.com/apis/library/books.googleapis.com).
-3. Create an API key (Credentials → Create credentials → API key).
-4. Set the key when running the backend:
+```bash
+cp backend/.env.example backend/.env
+```
 
-   ```bash
-   export GOOGLE_BOOKS_API_KEY=your_key_here
-   uvicorn app.main:app --reload --port 8000
-   ```
+`backend/.env`:
+```
+GOOGLE_BOOKS_API_KEY=        # optional but recommended (see below)
+MONGODB_URI=mongodb://localhost:27017
+APP_TIMEZONE=America/Chicago # your local timezone (default: UTC)
+```
 
-   Or put it in a `.env` file and load it (e.g. with `python-dotenv`) before starting the server. The app uses the key only for Google Books requests (fallback and description enrichment); Open Library is still used without a key.
+**3. Load the env and start the backend**
 
-## Tests
-
-Pytest is configured so **MongoDB is never used during tests**: `conftest.py` unsets `MONGODB_URI` before the app is loaded. You can run `pytest` from the backend directory even when direnv has set `MONGODB_URI`; the DB is skipped for all test runs.
-
-**Unit tests** (mocked, fast): validate app logic without calling Open Library.
+With [direnv](https://direnv.net/) (recommended — vars load automatically on `cd backend`):
 
 ```bash
 cd backend
-pip install -r requirements.txt
+direnv allow
+uvicorn app.main:app --reload --port 8000
+```
+
+Without direnv:
+
+```bash
+cd backend
+source .venv/bin/activate
+export $(grep -v '^#' .env | xargs)
+uvicorn app.main:app --reload --port 8000
+```
+
+**4. Start the frontend**
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+---
+
+## Google Books API key
+
+The app uses Google Books as its primary data source. Without an API key it works but may hit Google's anonymous quota limits (429 errors), especially if you look up many books.
+
+To get a key:
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) and create or select a project.
+2. Enable the [Books API](https://console.cloud.google.com/apis/library/books.googleapis.com).
+3. Go to **Credentials → Create credentials → API key** and copy the key.
+4. Add it to `backend/.env`:
+   ```
+   GOOGLE_BOOKS_API_KEY=your_key_here
+   ```
+
+---
+
+## Running with Docker Compose (all services)
+
+To run the backend and frontend in containers alongside MongoDB:
+
+```bash
+docker compose up -d
+```
+
+Set your Google Books API key in the environment before running:
+
+```bash
+GOOGLE_BOOKS_API_KEY=your_key_here docker compose up -d
+```
+
+| Service | URL |
+|---|---|
+| Frontend (Nginx) | http://localhost |
+| Backend (FastAPI) | http://localhost:8000 |
+| MongoDB | localhost:27017 |
+
+---
+
+## Features
+
+### Look up
+Enter an ISBN (10 or 13 digits) to fetch book metadata from Google Books: title, authors, cover, publisher, publish date, page count, subjects, and description. Results are cached in MongoDB so repeat lookups are instant.
+
+### Reading log (requires MongoDB)
+- **Backlog** — Add books from a lookup. Drag and drop to reorder within each group (Books / Articles / Poems).
+- **Currently reading** — Track your current page and see a progress bar. Update your page with plain numbers (`144`) or relative offsets (`+20`).
+- **Finished** — Books you've completed, with finish dates.
+- **Stats** — Pages read and items finished this month and year, broken out by books, articles, and poems.
+
+### Articles & Poems
+Manually add articles or poems (no ISBN needed) from the Look up page.
+
+### Edit
+Click **Edit** on any item to update its title, authors, publishers, page count, dates, description, and reading status.
+
+### View info
+Click anywhere on a card to open a read-only info panel showing all metadata for that item.
+
+### Reading calendar
+The Currently reading page shows a calendar of days you logged reading activity. Click any day to manually toggle it on or off.
+
+---
+
+## Tests
+
+MongoDB is never used during tests — `conftest.py` clears `MONGODB_URI` before the app loads.
+
+**Unit tests** (fast, no network):
+
+```bash
+cd backend
+source .venv/bin/activate
 pytest
 ```
 
-**Integration tests** (live Open Library and Google Books): run separately when you want to verify against the real services. They hit the APIs every time (no cache).
+**Integration tests** (hit the live Google Books API):
 
 ```bash
 cd backend
 pytest -m integration -v
+```
+
+Integration tests require network access and a Google Books API key with quota available (set `GOOGLE_BOOKS_API_KEY` in your env).
+
+---
+
+## Project structure
+
+```
+books/
+├── backend/
+│   ├── app/
+│   │   ├── main.py       # FastAPI routes
+│   │   ├── db.py         # MongoDB access layer
+│   │   └── models.py     # Pydantic models
+│   ├── tests/
+│   │   ├── test_main.py                    # unit tests
+│   │   └── integration/test_main_live.py   # integration tests
+│   ├── .env.example
+│   └── requirements.txt
+├── frontend/
+│   └── src/
+│       ├── pages/        # Vue page components
+│       ├── composables/  # Shared state (useBookLog.js)
+│       └── App.vue       # Root component + global modals
+└── docker-compose.yml
 ```
