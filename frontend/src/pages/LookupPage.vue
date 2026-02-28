@@ -44,15 +44,15 @@ const {
             <button
                 type="button"
                 class="mode-btn"
-                :class="{ active: searchMode === 'isbn' }"
-                @click="searchMode = 'isbn'"
-            >ISBN</button>
-            <button
-                type="button"
-                class="mode-btn"
                 :class="{ active: searchMode === 'title' }"
                 @click="searchMode = 'title'"
             >Title / Author</button>
+            <button
+                type="button"
+                class="mode-btn"
+                :class="{ active: searchMode === 'isbn' }"
+                @click="searchMode = 'isbn'"
+            >ISBN</button>
         </div>
 
         <form v-if="searchMode === 'isbn'" class="form" @submit.prevent="lookup">

@@ -23,7 +23,7 @@ onMounted(() => {
 <template>
     <header class="app-header">
         <h1 class="app-title">Book Log</h1>
-        <p class="app-tagline">Look up books by ISBN and track your reading</p>
+        <p class="app-tagline">Look up books and track your reading</p>
         <nav class="app-nav">
             <router-link to="/" class="nav-link" active-class="router-link-active" exact-active-class="router-link-active">
                 Currently reading
