@@ -55,28 +55,33 @@ docker compose up -d mongo
 
 This starts a MongoDB 7 container and exposes it on `localhost:27017`. Data is persisted in a Docker volume (`mongo_data`).
 
-**2. Configure the backend**
+**2. Configure the environment**
 
-Copy the example env file and edit it:
+Copy the example files and edit them:
 
 ```bash
-cp backend/.env.example backend/.env
+cp .env.local.example .env.local
+cp .env.secrets.example .env.secrets
 ```
 
-`backend/.env`:
+`.env.local` — non-secret config:
 ```
-GOOGLE_BOOKS_API_KEY=        # optional but recommended (see below)
 MONGODB_URI=mongodb://localhost:27017
-APP_TIMEZONE=America/Chicago # your local timezone (default: UTC)
+APP_TIMEZONE=America/Chicago  # your local timezone (default: UTC)
+```
+
+`.env.secrets` — keep this private, never commit it:
+```
+GOOGLE_BOOKS_API_KEY=your_key_here  # optional but recommended (see below)
 ```
 
 **3. Load the env and start the backend**
 
-With [direnv](https://direnv.net/) (recommended — vars load automatically on `cd backend`):
+With [direnv](https://direnv.net/) (recommended — vars load automatically on `cd` into the repo root):
 
 ```bash
-cd backend
 direnv allow
+cd backend
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -85,7 +90,8 @@ Without direnv:
 ```bash
 cd backend
 source .venv/bin/activate
-export $(grep -v '^#' .env | xargs)
+export $(grep -v '^#' ../.env.local | xargs)
+export $(grep -v '^#' ../.env.secrets | xargs)
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -108,7 +114,7 @@ To get a key:
 1. Go to [Google Cloud Console](https://console.cloud.google.com/) and create or select a project.
 2. Enable the [Books API](https://console.cloud.google.com/apis/library/books.googleapis.com).
 3. Go to **Credentials → Create credentials → API key** and copy the key.
-4. Add it to `backend/.env`:
+4. Add it to `.env.secrets`:
    ```
    GOOGLE_BOOKS_API_KEY=your_key_here
    ```
@@ -197,12 +203,14 @@ books/
 │   ├── tests/
 │   │   ├── test_main.py                    # unit tests
 │   │   └── integration/test_main_live.py   # integration tests
-│   ├── .env.example
 │   └── requirements.txt
 ├── frontend/
 │   └── src/
 │       ├── pages/        # Vue page components
 │       ├── composables/  # Shared state (useBookLog.js)
 │       └── App.vue       # Root component + global modals
+├── .env.local.example    # non-secret config template
+├── .env.secrets.example  # secret config template (copy → .env.secrets, never commit)
+├── .envrc                # direnv: loads .env.local and .env.secrets
 └── docker-compose.yml
 ```
