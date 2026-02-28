@@ -1,5 +1,9 @@
 # Book Log
 <img width="1420" height="494" alt="Screenshot 2026-02-27 at 9 44 33 PM" src="https://github.com/user-attachments/assets/dd04a06a-6fbf-4e6e-be74-9c135f43339e" />
+<img width="1435" height="834" alt="Screenshot 2026-02-27 at 9 45 19 PM" src="https://github.com/user-attachments/assets/6686d732-29c4-4194-b233-3cdc44f1f06e" />
+<img width="1446" height="586" alt="Screenshot 2026-02-27 at 9 45 43 PM" src="https://github.com/user-attachments/assets/486ee322-43b7-4585-b3b2-f530507da32e" />
+<img width="602" height="660" alt="Screenshot 2026-02-27 at 9 46 00 PM" src="https://github.com/user-attachments/assets/4a7192c7-4f51-443b-8d54-6208e00e7c78" />
+<img width="700" height="850" alt="Screenshot 2026-02-27 at 9 46 22 PM" src="https://github.com/user-attachments/assets/dda1e05b-2779-4135-90b6-09970e58d580" />
 
 A personal reading tracker. Look up books by ISBN, maintain a backlog, track reading progress, and log what you've finished.
 
