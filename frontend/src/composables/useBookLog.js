@@ -282,7 +282,7 @@ export function useBookLog() {
         try {
             await supabase
                 .from("calendar_overrides")
-                .upsert({ date: dateStr, show: !currentlyActive }, { onConflict: "date" });
+                .upsert({ date: dateStr, show: !currentlyActive });
             await loadActivityDates();
         } catch {
             await loadActivityDates();
@@ -370,6 +370,17 @@ export function useBookLog() {
         return item && item.entry_type === "poem";
     }
 
+    async function getNextBacklogOrder() {
+        const { data } = await supabase
+            .from("books")
+            .select("backlog_order")
+            .eq("status", "backlog")
+            .order("backlog_order", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        return data?.backlog_order != null ? data.backlog_order + 1 : 0;
+    }
+
     async function submitArticle() {
         const title = (articleForm.value.title || "").trim();
         if (!title) {
@@ -382,31 +393,30 @@ export function useBookLog() {
             const authors = articleForm.value.authors
                 ? articleForm.value.authors.split(",").map((s) => s.trim()).filter(Boolean)
                 : undefined;
-            const body = {
-                title,
-                entry_type: "article",
-                authors: authors?.length ? authors : undefined,
-                status: articleForm.value.status || "backlog",
-                number_of_pages: articleForm.value.number_of_pages
-                    ? parseInt(articleForm.value.number_of_pages, 10)
-                    : undefined,
-                publish_date: (articleForm.value.publish_date || "").trim() || undefined,
-                description: (articleForm.value.description || "").trim() || undefined,
-            };
+            const status = articleForm.value.status || "backlog";
             const articleId = `article-${crypto.randomUUID().replace(/-/g, "")}`;
-            const { error: err } = await supabase.from("books").insert({
+            const row = {
                 isbn: articleId,
                 entry_type: "article",
-                title: body.title,
-                authors: body.authors || ["Unknown"],
+                title,
+                authors: authors?.length ? authors : ["Unknown"],
                 publishers: [],
                 subjects: [],
-                status: body.status || "backlog",
-                number_of_pages: body.number_of_pages || null,
-                publish_date: body.publish_date || null,
-                description: body.description || null,
-                backlog_date: today.value,
-            });
+                status,
+                number_of_pages: articleForm.value.number_of_pages
+                    ? parseInt(articleForm.value.number_of_pages, 10) : null,
+                publish_date: (articleForm.value.publish_date || "").trim() || null,
+                description: (articleForm.value.description || "").trim() || null,
+            };
+            if (status === "backlog") {
+                row.backlog_order = await getNextBacklogOrder();
+                row.backlog_date = today.value;
+            } else if (status === "in_progress") {
+                row.started_date = today.value;
+            } else if (status === "finished") {
+                row.finished_date = today.value;
+            }
+            const { error: err } = await supabase.from("books").insert(row);
             if (err) throw new Error(err.message);
             articleForm.value = {
                 title: "", authors: "", status: "backlog", number_of_pages: "",
@@ -434,31 +444,30 @@ export function useBookLog() {
             const authors = poemForm.value.authors
                 ? poemForm.value.authors.split(",").map((s) => s.trim()).filter(Boolean)
                 : undefined;
-            const body = {
-                title,
-                entry_type: "poem",
-                authors: authors?.length ? authors : undefined,
-                status: poemForm.value.status || "backlog",
-                number_of_pages: poemForm.value.number_of_pages
-                    ? parseInt(poemForm.value.number_of_pages, 10)
-                    : undefined,
-                publish_date: (poemForm.value.publish_date || "").trim() || undefined,
-                description: (poemForm.value.description || "").trim() || undefined,
-            };
+            const status = poemForm.value.status || "backlog";
             const poemId = `article-${crypto.randomUUID().replace(/-/g, "")}`;
-            const { error: err } = await supabase.from("books").insert({
+            const row = {
                 isbn: poemId,
                 entry_type: "poem",
-                title: body.title,
-                authors: body.authors || ["Unknown"],
+                title,
+                authors: authors?.length ? authors : ["Unknown"],
                 publishers: [],
                 subjects: [],
-                status: body.status || "backlog",
-                number_of_pages: body.number_of_pages || null,
-                publish_date: body.publish_date || null,
-                description: body.description || null,
-                backlog_date: today.value,
-            });
+                status,
+                number_of_pages: poemForm.value.number_of_pages
+                    ? parseInt(poemForm.value.number_of_pages, 10) : null,
+                publish_date: (poemForm.value.publish_date || "").trim() || null,
+                description: (poemForm.value.description || "").trim() || null,
+            };
+            if (status === "backlog") {
+                row.backlog_order = await getNextBacklogOrder();
+                row.backlog_date = today.value;
+            } else if (status === "in_progress") {
+                row.started_date = today.value;
+            } else if (status === "finished") {
+                row.finished_date = today.value;
+            }
+            const { error: err } = await supabase.from("books").insert(row);
             if (err) throw new Error(err.message);
             poemForm.value = {
                 title: "", authors: "", status: "backlog", number_of_pages: "",

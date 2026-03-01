@@ -105,12 +105,12 @@ Deno.serve(async (req) => {
     );
   }
 
-  // Check cache first
+  // Check cache first (RLS scopes to current user automatically)
   const { data: cached } = await supabase
     .from("books")
     .select("*")
     .eq("isbn", isbn)
-    .single();
+    .maybeSingle();
 
   if (cached) {
     // Touch last_looked_up timestamp
@@ -145,11 +145,15 @@ Deno.serve(async (req) => {
     if (olPages) result.number_of_pages = olPages;
   }
 
-  // Save to cache
-  await supabase.from("books").upsert({
-    ...result,
-    last_looked_up: new Date().toISOString(),
-  });
+  // Save to cache (include user_id for composite PK)
+  await supabase.from("books").upsert(
+    {
+      ...result,
+      user_id: user.id,
+      last_looked_up: new Date().toISOString(),
+    },
+    { onConflict: "isbn,user_id" },
+  );
 
   return jsonResponse(result);
 });
