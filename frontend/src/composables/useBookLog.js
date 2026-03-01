@@ -55,6 +55,21 @@ const searchResults = ref([]);
 const monthSummary = ref({ pages_read: 0, pages_recorded: 0, items_finished: [], dates: [] });
 const viewBookItem = ref(null);
 const confirmationMessage = ref(null);
+const showCelebration = ref(false);
+const celebrationCover = ref(null);
+
+const finishMessages = [
+    "Another one down!",
+    "Well read!",
+    "Knowledge unlocked!",
+    "You crushed it!",
+    "Page-turner conquered!",
+    "One more for the shelf!",
+    "Bookworm level up!",
+    "That's a wrap!",
+    "Finished and fabulous!",
+    "Reading streak!",
+];
 
 export function useBookLog() {
     const canSubmit = computed(() => {
@@ -711,16 +726,16 @@ export function useBookLog() {
         } catch {}
     }
 
-    function openFinishModal(isbnVal, title) {
+    function openFinishModal(isbnVal, title, coverUrl) {
         viewBookItem.value = null; // close view modal if open
-        editBook.value = { isbn: isbnVal, title: title || null };
+        editBook.value = { isbn: isbnVal, title: title || null, cover_url: coverUrl || null };
         finishDate.value = today.value;
         showFinishModal.value = true;
     }
 
     async function markFinishedFromLookup() {
         if (!book.value?.isbn) return;
-        editBook.value = { isbn: book.value.isbn, title: book.value.title };
+        editBook.value = { isbn: book.value.isbn, title: book.value.title, cover_url: book.value.cover_url || null };
         finishDate.value = today.value;
         book.value = null; // close the lookup modal first
         showFinishModal.value = true;
@@ -735,14 +750,20 @@ export function useBookLog() {
                 .eq("isbn", editBook.value.isbn);
             if (err) throw new Error(err.message);
             const title = editBook.value.title;
+            const cover = editBook.value.cover_url;
             showFinishModal.value = false;
             editBook.value = null;
             await refreshReadingLog();
             await loadHistory();
-            if (title) {
-                confirmationMessage.value = `"${title}" marked as finished`;
-                setTimeout(() => { confirmationMessage.value = null; }, 3000);
-            }
+            const msg = finishMessages[Math.floor(Math.random() * finishMessages.length)];
+            confirmationMessage.value = title ? `"${title}" finished — ${msg}` : msg;
+            celebrationCover.value = cover || null;
+            showCelebration.value = true;
+            setTimeout(() => {
+                confirmationMessage.value = null;
+                showCelebration.value = false;
+                celebrationCover.value = null;
+            }, 4000);
         } catch (e) {
             error.value = e.message;
         }
@@ -1071,6 +1092,8 @@ export function useBookLog() {
         closeViewModal,
         clearBook,
         confirmationMessage,
+        showCelebration,
+        celebrationCover,
         init,
     };
 }

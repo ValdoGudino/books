@@ -156,7 +156,7 @@ onMounted(() => {
                             </div>
                         </div>
                         <div class="list-actions">
-                            <button type="button" class="btn-small" @click.stop="openFinishModal(item.isbn, item.title)">Mark finished</button>
+                            <button type="button" class="btn-small" @click.stop="openFinishModal(item.isbn, item.title, item.cover_url)">Mark finished</button>
                             <button type="button" class="btn-small btn-ghost" @click.stop="openEdit(item)">Edit</button>
                             <button type="button" class="btn-small btn-ghost" title="Remove from list (keeps pages read)" @click.stop="removeFromList(item.isbn)">Remove</button>
                         </div>
@@ -196,7 +196,7 @@ onMounted(() => {
                             </div>
                         </div>
                         <div class="list-actions">
-                            <button type="button" class="btn-small" @click.stop="openFinishModal(item.isbn, item.title)">Mark finished</button>
+                            <button type="button" class="btn-small" @click.stop="openFinishModal(item.isbn, item.title, item.cover_url)">Mark finished</button>
                             <button type="button" class="btn-small btn-ghost" @click.stop="openEdit(item)">Edit</button>
                             <button type="button" class="btn-small btn-ghost" title="Remove from list (keeps pages read)" @click.stop="removeFromList(item.isbn)">Remove</button>
                         </div>
@@ -236,7 +236,7 @@ onMounted(() => {
                             </div>
                         </div>
                         <div class="list-actions">
-                            <button type="button" class="btn-small" @click.stop="openFinishModal(item.isbn, item.title)">Mark finished</button>
+                            <button type="button" class="btn-small" @click.stop="openFinishModal(item.isbn, item.title, item.cover_url)">Mark finished</button>
                             <button type="button" class="btn-small btn-ghost" @click.stop="openEdit(item)">Edit</button>
                             <button type="button" class="btn-small btn-ghost" title="Remove from list (keeps pages read)" @click.stop="removeFromList(item.isbn)">Remove</button>
                         </div>

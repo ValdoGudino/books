@@ -17,6 +17,8 @@ const {
     closeViewModal,
     clearBook,
     confirmationMessage,
+    showCelebration,
+    celebrationCover,
     init,
 } = useBookLog();
 
@@ -104,8 +106,38 @@ onUnmounted(() => document.removeEventListener("keydown", handleGlobalKeydown));
         <router-view />
     </main>
 
-    <!-- Confirmation toast -->
-    <div v-if="confirmationMessage" class="confirmation-toast">
+    <!-- Celebration overlay -->
+    <div v-if="showCelebration" class="celebrate-overlay" @click="showCelebration = false; confirmationMessage = null;">
+        <div class="confetti-container" aria-hidden="true">
+            <div v-for="i in 40" :key="i" class="confetti-piece" :style="{
+                left: Math.random() * 100 + '%',
+                animationDelay: Math.random() * 0.5 + 's',
+                animationDuration: (1.5 + Math.random() * 2) + 's',
+                '--confetti-color': ['#c9a227','#e8c547','#4ade80','#60a5fa','#f472b6','#a78bfa','#fb923c'][i % 7],
+                '--confetti-rotation': (Math.random() * 720 - 360) + 'deg',
+                '--confetti-x': (Math.random() * 200 - 100) + 'px',
+            }" />
+        </div>
+        <div class="celebrate-circle">
+            <div class="celebrate-book-wrap">
+                <span v-if="!celebrationCover" class="celebrate-tada">🎊</span>
+                <div class="celebrate-book" :class="{ 'has-cover': celebrationCover }">
+                    <div class="book-cover book-left"></div>
+                    <div class="book-cover book-right"></div>
+                    <img
+                        v-if="celebrationCover"
+                        :src="celebrationCover"
+                        alt=""
+                        class="celebrate-cover-img"
+                    />
+                </div>
+            </div>
+            <p class="celebrate-msg">{{ confirmationMessage }}</p>
+        </div>
+    </div>
+
+    <!-- Confirmation toast (non-celebration) -->
+    <div v-if="confirmationMessage && !showCelebration" class="confirmation-toast">
         {{ confirmationMessage }}
     </div>
 
