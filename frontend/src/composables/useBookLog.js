@@ -1,4 +1,21 @@
 import { ref, computed } from "vue";
+import { useAuth } from "./useAuth";
+
+const { getAccessToken } = useAuth();
+
+/** Build headers with JSON content type and Supabase auth token. */
+function authHeaders(extra = {}) {
+    const headers = { "Content-Type": "application/json", ...extra };
+    const token = getAccessToken();
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    return headers;
+}
+
+/** Wrapper around fetch that attaches the auth token. */
+async function authFetch(url, opts = {}) {
+    const headers = authHeaders(opts.headers);
+    return fetch(url, { ...opts, headers });
+}
 
 // Shared state (module-level so all pages see the same data)
 const isbn = ref("");
@@ -138,7 +155,7 @@ export function useBookLog() {
 
     async function loadHistory() {
         try {
-            const res = await fetch("/api/books/history");
+            const res = await authFetch("/api/books/history");
             if (res.ok) history.value = await res.json();
         } catch {
             history.value = [];
@@ -147,7 +164,7 @@ export function useBookLog() {
 
     async function loadBacklog() {
         try {
-            const res = await fetch("/api/books/backlog");
+            const res = await authFetch("/api/books/backlog");
             if (res.ok) backlog.value = await res.json();
         } catch {
             backlog.value = [];
@@ -156,7 +173,7 @@ export function useBookLog() {
 
     async function loadInProgress() {
         try {
-            const res = await fetch("/api/books/in-progress");
+            const res = await authFetch("/api/books/in-progress");
             if (res.ok) inProgress.value = await res.json();
         } catch {
             inProgress.value = [];
@@ -165,7 +182,7 @@ export function useBookLog() {
 
     async function loadFinished() {
         try {
-            const res = await fetch("/api/books/finished");
+            const res = await authFetch("/api/books/finished");
             if (res.ok) finished.value = await res.json();
         } catch {
             finished.value = [];
@@ -175,14 +192,14 @@ export function useBookLog() {
     async function loadStats() {
         try {
             const clientToday = new Date().toISOString().slice(0, 10);
-            const res = await fetch(`/api/books/stats?today=${encodeURIComponent(clientToday)}`);
+            const res = await authFetch(`/api/books/stats?today=${encodeURIComponent(clientToday)}`);
             if (res.ok) stats.value = await res.json();
         } catch {}
     }
 
     async function loadActivityDates() {
         try {
-            const res = await fetch("/api/reading-activity/dates");
+            const res = await authFetch("/api/reading-activity/dates");
             if (res.ok) {
                 const data = await res.json();
                 const dates = Array.isArray(data.dates) ? data.dates : [];
@@ -198,9 +215,8 @@ export function useBookLog() {
     async function toggleCalendarDay(dateStr) {
         const currentlyActive = activityDates.value.includes(dateStr);
         try {
-            const res = await fetch("/api/reading-activity/calendar-override", {
+            const res = await authFetch("/api/reading-activity/calendar-override", {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ date: dateStr, show: !currentlyActive }),
             });
             if (res.ok) {
@@ -218,7 +234,7 @@ export function useBookLog() {
     async function deleteFromRead(isbnVal) {
         if (!confirm("Delete this item and clear it from history? This cannot be undone.")) return;
         try {
-            const res = await fetch(`/api/books/${encodeURIComponent(isbnVal)}`, { method: "DELETE" });
+            const res = await authFetch(`/api/books/${encodeURIComponent(isbnVal)}`, { method: "DELETE" });
             if (!res.ok) throw new Error("Failed");
             await refreshReadingLog();
             await loadHistory();
@@ -230,7 +246,7 @@ export function useBookLog() {
     async function loadMonthSummary(year, month) {
         const m = typeof month === "number" ? month + 1 : month; // 0-11 -> 1-12 for API
         try {
-            const res = await fetch(
+            const res = await authFetch(
                 `/api/reading-activity/month?year=${encodeURIComponent(year)}&month=${encodeURIComponent(m)}`,
             );
             if (res.ok) {
@@ -290,9 +306,9 @@ export function useBookLog() {
                 publish_date: (articleForm.value.publish_date || "").trim() || undefined,
                 description: (articleForm.value.description || "").trim() || undefined,
             };
-            const res = await fetch("/api/articles", {
+            const res = await authFetch("/api/articles", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+
                 body: JSON.stringify(body),
             });
             if (!res.ok) {
@@ -336,9 +352,9 @@ export function useBookLog() {
                 publish_date: (poemForm.value.publish_date || "").trim() || undefined,
                 description: (poemForm.value.description || "").trim() || undefined,
             };
-            const res = await fetch("/api/articles", {
+            const res = await authFetch("/api/articles", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+
                 body: JSON.stringify(body),
             });
             if (!res.ok) {
@@ -366,7 +382,7 @@ export function useBookLog() {
         loading.value = true;
         try {
             const cleaned = isbn.value.replace(/[\s-]/g, "");
-            const res = await fetch(`/api/books/isbn/${encodeURIComponent(cleaned)}`);
+            const res = await authFetch(`/api/books/isbn/${encodeURIComponent(cleaned)}`);
             if (!res.ok) {
                 const data = await res.json().catch(() => ({}));
                 throw new Error(data.detail || res.statusText || "Book not found");
@@ -391,7 +407,7 @@ export function useBookLog() {
             const params = new URLSearchParams();
             if (titleQuery.value.trim()) params.set("title", titleQuery.value.trim());
             if (authorQuery.value.trim()) params.set("author", authorQuery.value.trim());
-            const res = await fetch(`/api/books/search?${params}`);
+            const res = await authFetch(`/api/books/search?${params}`);
             if (!res.ok) {
                 const data = await res.json().catch(() => ({}));
                 throw new Error(data.detail || res.statusText || "Search failed");
@@ -422,7 +438,7 @@ export function useBookLog() {
         error.value = null;
         loading.value = true;
         try {
-            const res = await fetch(`/api/books/isbn/${encodeURIComponent(book.value.isbn)}`);
+            const res = await authFetch(`/api/books/isbn/${encodeURIComponent(book.value.isbn)}`);
             if (!res.ok) {
                 const data = await res.json().catch(() => ({}));
                 throw new Error(data.detail || res.statusText || "Refresh failed");
@@ -445,9 +461,9 @@ export function useBookLog() {
     async function addToBacklog() {
         if (!book.value?.isbn) return;
         try {
-            const res = await fetch("/api/books/backlog", {
+            const res = await authFetch("/api/books/backlog", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+
                 body: JSON.stringify({ isbn: book.value.isbn }),
             });
             if (!res.ok)
@@ -460,9 +476,9 @@ export function useBookLog() {
 
     async function startReading(isbnVal) {
         try {
-            const res = await fetch(`/api/books/${encodeURIComponent(isbnVal)}`, {
+            const res = await authFetch(`/api/books/${encodeURIComponent(isbnVal)}`, {
                 method: "PATCH",
-                headers: { "Content-Type": "application/json" },
+
                 body: JSON.stringify({ status: "in_progress", current_page: 0 }),
             });
             if (!res.ok) throw new Error("Failed");
@@ -475,15 +491,15 @@ export function useBookLog() {
     async function startReadingFromLookup() {
         if (!book.value?.isbn) return;
         try {
-            const addRes = await fetch("/api/books/backlog", {
+            const addRes = await authFetch("/api/books/backlog", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+
                 body: JSON.stringify({ isbn: book.value.isbn }),
             });
             if (!addRes.ok) throw new Error("Add failed");
-            await fetch(`/api/books/${encodeURIComponent(book.value.isbn)}`, {
+            await authFetch(`/api/books/${encodeURIComponent(book.value.isbn)}`, {
                 method: "PATCH",
-                headers: { "Content-Type": "application/json" },
+
                 body: JSON.stringify({ status: "in_progress", current_page: 0 }),
             });
             await refreshReadingLog();
@@ -522,9 +538,9 @@ export function useBookLog() {
         );
         if (page === null || page < 0) return;
         try {
-            const res = await fetch(`/api/books/${encodeURIComponent(isbnVal)}`, {
+            const res = await authFetch(`/api/books/${encodeURIComponent(isbnVal)}`, {
                 method: "PATCH",
-                headers: { "Content-Type": "application/json" },
+
                 body: JSON.stringify({ current_page: page }),
             });
             if (!res.ok) return;
@@ -559,11 +575,11 @@ export function useBookLog() {
     async function confirmMarkFinished() {
         if (!editBook.value?.isbn || !finishDate.value) return;
         try {
-            const res = await fetch(
+            const res = await authFetch(
                 `/api/books/${encodeURIComponent(editBook.value.isbn)}`,
                 {
                     method: "PATCH",
-                    headers: { "Content-Type": "application/json" },
+    
                     body: JSON.stringify({
                         status: "finished",
                         finished_date: finishDate.value,
@@ -582,9 +598,9 @@ export function useBookLog() {
     async function removeFromList(isbnVal) {
         if (!confirm("Remove from list? Progress (e.g. pages read) is kept.")) return;
         try {
-            const res = await fetch(`/api/books/${encodeURIComponent(isbnVal)}`, {
+            const res = await authFetch(`/api/books/${encodeURIComponent(isbnVal)}`, {
                 method: "PATCH",
-                headers: { "Content-Type": "application/json" },
+
                 body: JSON.stringify({ status: null }),
             });
             if (!res.ok) throw new Error("Failed");
@@ -644,9 +660,9 @@ export function useBookLog() {
         reordered.splice(newIndex, 0, removed);
         const fullOrder = mergeBacklogOrder(backlog.value, reordered, sectionType);
         try {
-            await fetch("/api/books/backlog/order", {
+            await authFetch("/api/books/backlog/order", {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
+
                 body: JSON.stringify({ isbns: fullOrder.map((i) => i.isbn) }),
             });
             await loadBacklog();
@@ -671,9 +687,9 @@ export function useBookLog() {
         reordered.splice(newIndex, 0, removed);
         const fullOrder = mergeBacklogOrder(backlog.value, reordered, sectionType);
         try {
-            await fetch("/api/books/backlog/order", {
+            await authFetch("/api/books/backlog/order", {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
+
                 body: JSON.stringify({ isbns: fullOrder.map((i) => i.isbn) }),
             });
             await loadBacklog();
@@ -702,9 +718,9 @@ export function useBookLog() {
         reordered.splice(dropIndex, 0, removed);
         const fullOrder = mergeBacklogOrder(backlog.value, reordered, sectionType);
         try {
-            await fetch("/api/books/backlog/order", {
+            await authFetch("/api/books/backlog/order", {
                 method: "PUT",
-                headers: { "Content-Type": "application/json" },
+
                 body: JSON.stringify({ isbns: fullOrder.map((i) => i.isbn) }),
             });
             await loadBacklog();
@@ -755,9 +771,9 @@ export function useBookLog() {
                     : undefined,
         };
         try {
-            const res = await fetch(`/api/books/${encodeURIComponent(b.isbn)}`, {
+            const res = await authFetch(`/api/books/${encodeURIComponent(b.isbn)}`, {
                 method: "PATCH",
-                headers: { "Content-Type": "application/json" },
+
                 body: JSON.stringify(payload),
             });
             if (!res.ok) throw new Error("Failed");

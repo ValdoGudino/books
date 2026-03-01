@@ -2,6 +2,7 @@
 import { ref, watch, onMounted, onUnmounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { useBookLog } from "./composables/useBookLog";
+import { useAuth } from "./composables/useAuth";
 
 const {
     book,
@@ -18,12 +19,18 @@ const {
     init,
 } = useBookLog();
 
+const { user, signOut } = useAuth();
 const descExpanded = ref(false);
 watch(viewBookItem, () => { descExpanded.value = false; });
 
 const router = useRouter();
 const route = useRoute();
 const navRoutes = ["/", "/backlog", "/read", "/stats", "/lookup"];
+
+async function handleSignOut() {
+    await signOut();
+    router.push("/login");
+}
 
 function handleGlobalKeydown(e) {
     if (e.key === "Escape") {
@@ -50,16 +57,26 @@ function handleGlobalKeydown(e) {
 }
 
 onMounted(() => {
-    init();
+    if (user.value) init();
     document.addEventListener("keydown", handleGlobalKeydown);
+});
+
+// Re-init data when user signs in
+watch(user, (newUser) => {
+    if (newUser) init();
 });
 onUnmounted(() => document.removeEventListener("keydown", handleGlobalKeydown));
 </script>
 
 <template>
-    <header class="app-header">
-        <h1 class="app-title">Book Log</h1>
-        <p class="app-tagline">Look up books and track your reading</p>
+    <header v-if="user" class="app-header">
+        <div class="app-header-top">
+            <div>
+                <h1 class="app-title">Book Log</h1>
+                <p class="app-tagline">Look up books and track your reading</p>
+            </div>
+            <button type="button" class="btn-small btn-ghost" @click="handleSignOut">Sign out</button>
+        </div>
         <nav class="app-nav">
             <router-link to="/" class="nav-link" active-class="router-link-active" exact-active-class="router-link-active">
                 Currently reading

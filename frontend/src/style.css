@@ -36,6 +36,12 @@ body {
 .app-header {
   margin-bottom: 1.5rem;
 }
+.app-header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
 .app-title {
   font-family: var(--font-serif);
   font-size: 2rem;
