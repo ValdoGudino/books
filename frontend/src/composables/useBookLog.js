@@ -711,16 +711,18 @@ export function useBookLog() {
         } catch {}
     }
 
-    function openFinishModal(isbnVal) {
-        editBook.value = { isbn: isbnVal };
+    function openFinishModal(isbnVal, title) {
+        viewBookItem.value = null; // close view modal if open
+        editBook.value = { isbn: isbnVal, title: title || null };
         finishDate.value = today.value;
         showFinishModal.value = true;
     }
 
     async function markFinishedFromLookup() {
         if (!book.value?.isbn) return;
-        editBook.value = { isbn: book.value.isbn };
+        editBook.value = { isbn: book.value.isbn, title: book.value.title };
         finishDate.value = today.value;
+        book.value = null; // close the lookup modal first
         showFinishModal.value = true;
     }
 
@@ -732,9 +734,15 @@ export function useBookLog() {
                 .update({ status: "finished", finished_date: finishDate.value })
                 .eq("isbn", editBook.value.isbn);
             if (err) throw new Error(err.message);
+            const title = editBook.value.title;
             showFinishModal.value = false;
             editBook.value = null;
             await refreshReadingLog();
+            await loadHistory();
+            if (title) {
+                confirmationMessage.value = `"${title}" marked as finished`;
+                setTimeout(() => { confirmationMessage.value = null; }, 3000);
+            }
         } catch (e) {
             error.value = e.message;
         }
