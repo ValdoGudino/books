@@ -16,7 +16,10 @@ const {
     moveBacklogItem,
     moveBacklogItemToPosition,
     openViewModal,
+    updateFormat,
 } = useBookLog();
+
+const formats = ['physical', 'ebook', 'audio', 'multi'];
 
 const vFocus = { mounted: (el) => { el.focus(); el.select(); } };
 
@@ -122,6 +125,9 @@ onUnmounted(() => document.removeEventListener("keydown", handleKeydown));
                             <span class="list-title">{{ item.title }}</span>
                             <span v-if="item.authors?.length" class="list-authors">{{ item.authors.join(", ") }}</span>
                             <span v-if="item.backlog_date" class="list-date">Added {{ formatDate(item.backlog_date) }}</span>
+                            <div class="format-tags" @click.stop>
+                                <button v-for="f in formats" :key="f" type="button" :class="['badge-format', `badge-format-${f}`, { active: item.format === f }]" @click="updateFormat(item.isbn, item.format === f ? null : f)">{{ f }}</button>
+                            </div>
                         </div>
                         <div class="list-spacer"></div>
                         <div class="reorder-btns">
@@ -172,6 +178,9 @@ onUnmounted(() => document.removeEventListener("keydown", handleKeydown));
                             <span class="badge badge-article">Article</span>
                             <span v-if="item.authors?.length" class="list-authors">{{ item.authors.join(", ") }}</span>
                             <span v-if="item.backlog_date" class="list-date">Added {{ formatDate(item.backlog_date) }}</span>
+                            <div class="format-tags" @click.stop>
+                                <button v-for="f in formats" :key="f" type="button" :class="['badge-format', `badge-format-${f}`, { active: item.format === f }]" @click="updateFormat(item.isbn, item.format === f ? null : f)">{{ f }}</button>
+                            </div>
                         </div>
                         <div class="list-spacer"></div>
                         <div class="reorder-btns">
@@ -222,6 +231,9 @@ onUnmounted(() => document.removeEventListener("keydown", handleKeydown));
                             <span class="badge badge-poem">Poem</span>
                             <span v-if="item.authors?.length" class="list-authors">{{ item.authors.join(", ") }}</span>
                             <span v-if="item.backlog_date" class="list-date">Added {{ formatDate(item.backlog_date) }}</span>
+                            <div class="format-tags" @click.stop>
+                                <button v-for="f in formats" :key="f" type="button" :class="['badge-format', `badge-format-${f}`, { active: item.format === f }]" @click="updateFormat(item.isbn, item.format === f ? null : f)">{{ f }}</button>
+                            </div>
                         </div>
                         <div class="list-spacer"></div>
                         <div class="reorder-btns">

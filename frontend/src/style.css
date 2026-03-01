@@ -188,6 +188,49 @@ body {
   color: var(--bg);
 }
 
+/* Format tags */
+.format-tags {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+.badge-format {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  transition: all 0.15s ease;
+  font-family: inherit;
+  line-height: 1.3;
+}
+.badge-format:hover {
+  border-color: var(--muted);
+}
+.badge-format-physical {
+  --fmt-color: #d4915e;
+}
+.badge-format-ebook {
+  --fmt-color: #5b9bd5;
+}
+.badge-format-audio {
+  --fmt-color: #5bb878;
+}
+.badge-format-multi {
+  --fmt-color: #9b7ed8;
+}
+.badge-format.active {
+  background: var(--fmt-color);
+  border-color: var(--fmt-color);
+  color: var(--bg);
+}
+
 .subsection-title {
   font-size: 0.95rem;
   font-weight: 600;

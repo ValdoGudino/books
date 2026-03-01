@@ -215,12 +215,24 @@ export function useBookLog() {
             const startOfMonth = `${year}-${String(month).padStart(2, "0")}-01`;
             const startOfYear = `${year}-01-01`;
 
-            const { data: finishedItems, error: err } = await supabase
-                .from("books")
-                .select("entry_type, number_of_pages, finished_date")
-                .eq("status", "finished");
+            const [finishedResult, progressMonthResult, progressYearResult] = await Promise.all([
+                supabase
+                    .from("books")
+                    .select("entry_type, number_of_pages, finished_date")
+                    .eq("status", "finished"),
+                supabase
+                    .from("progress_events")
+                    .select("delta")
+                    .gte("date", startOfMonth)
+                    .lte("date", clientToday),
+                supabase
+                    .from("progress_events")
+                    .select("delta")
+                    .gte("date", startOfYear)
+                    .lte("date", clientToday),
+            ]);
 
-            if (err || !finishedItems) return;
+            const finishedItems = finishedResult.data || [];
 
             let books_finished_count = 0;
             let articles_finished_count = 0;
@@ -240,13 +252,18 @@ export function useBookLog() {
                 if (fd && fd >= startOfYear) pages_from_finished_year += pages;
             }
 
+            const pages_recorded_this_month = (progressMonthResult.data || [])
+                .reduce((sum, ev) => sum + (ev.delta || 0), 0);
+            const pages_recorded_this_year = (progressYearResult.data || [])
+                .reduce((sum, ev) => sum + (ev.delta || 0), 0);
+
             stats.value = {
-                pages_this_month: pages_from_finished_month,
-                pages_this_year: pages_from_finished_year,
+                pages_this_month: pages_from_finished_month + pages_recorded_this_month,
+                pages_this_year: pages_from_finished_year + pages_recorded_this_year,
                 pages_from_finished_this_month: pages_from_finished_month,
                 pages_from_finished_this_year: pages_from_finished_year,
-                pages_recorded_this_month: 0,
-                pages_recorded_this_year: 0,
+                pages_recorded_this_month,
+                pages_recorded_this_year,
                 books_finished_count,
                 articles_finished_count,
                 poems_finished_count,
@@ -326,27 +343,36 @@ export function useBookLog() {
         const lastDay = new Date(year, m, 0).getDate();
         const endDate = `${year}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
         try {
-            const { data: finishedItems } = await supabase
-                .from("books")
-                .select("*")
-                .eq("status", "finished")
-                .gte("finished_date", startDate)
-                .lte("finished_date", endDate);
+            const [finishedResult, activityResult, progressResult] = await Promise.all([
+                supabase
+                    .from("books")
+                    .select("*")
+                    .eq("status", "finished")
+                    .gte("finished_date", startDate)
+                    .lte("finished_date", endDate),
+                supabase
+                    .from("books")
+                    .select("started_date, finished_date, last_progress_date")
+                    .or("started_date.not.is.null,finished_date.not.is.null,last_progress_date.not.is.null"),
+                supabase
+                    .from("progress_events")
+                    .select("delta")
+                    .gte("date", startDate)
+                    .lte("date", endDate),
+            ]);
 
-            const items = finishedItems || [];
+            const items = finishedResult.data || [];
             const pagesRead = items.reduce(
                 (sum, item) => sum + (typeof item.number_of_pages === "number" ? item.number_of_pages : 0),
                 0,
             );
 
-            const { data: activityBooks } = await supabase
-                .from("books")
-                .select("started_date, finished_date, last_progress_date")
-                .or("started_date.not.is.null,finished_date.not.is.null,last_progress_date.not.is.null");
+            const pagesRecorded = (progressResult.data || [])
+                .reduce((sum, ev) => sum + (ev.delta || 0), 0);
 
             const datesInMonth = new Set();
-            if (activityBooks) {
-                for (const doc of activityBooks) {
+            if (activityResult.data) {
+                for (const doc of activityResult.data) {
                     for (const key of ["started_date", "finished_date", "last_progress_date"]) {
                         const val = doc[key];
                         if (val) {
@@ -359,7 +385,7 @@ export function useBookLog() {
 
             monthSummary.value = {
                 pages_read: pagesRead,
-                pages_recorded: 0,
+                pages_recorded: pagesRecorded,
                 items_finished: items,
                 dates: [...datesInMonth].sort(),
             };
@@ -423,6 +449,7 @@ export function useBookLog() {
                     ? parseInt(articleForm.value.number_of_pages, 10) : null,
                 publish_date: (articleForm.value.publish_date || "").trim() || null,
                 description: (articleForm.value.description || "").trim() || null,
+                format: articleForm.value.format || null,
             };
             if (status === "backlog") {
                 row.backlog_order = await getNextBacklogOrder();
@@ -436,7 +463,7 @@ export function useBookLog() {
             if (err) throw new Error(err.message);
             articleForm.value = {
                 title: "", authors: "", status: "backlog", number_of_pages: "",
-                publish_date: "", description: "",
+                publish_date: "", description: "", format: "",
             };
             showArticleForm.value = false;
             await refreshReadingLog();
@@ -474,6 +501,7 @@ export function useBookLog() {
                     ? parseInt(poemForm.value.number_of_pages, 10) : null,
                 publish_date: (poemForm.value.publish_date || "").trim() || null,
                 description: (poemForm.value.description || "").trim() || null,
+                format: poemForm.value.format || null,
             };
             if (status === "backlog") {
                 row.backlog_order = await getNextBacklogOrder();
@@ -487,7 +515,7 @@ export function useBookLog() {
             if (err) throw new Error(err.message);
             poemForm.value = {
                 title: "", authors: "", status: "backlog", number_of_pages: "",
-                publish_date: "", description: "",
+                publish_date: "", description: "", format: "",
             };
             showPoemForm.value = false;
             await refreshReadingLog();
@@ -625,12 +653,14 @@ export function useBookLog() {
             .then(() => loadHistory());
     }
 
-    async function addToBacklog() {
+    async function addToBacklog(format) {
         if (!book.value?.isbn) return;
         try {
+            const payload = { status: "backlog", backlog_date: today.value };
+            if (format) payload.format = format;
             const { error: err } = await supabase
                 .from("books")
-                .update({ status: "backlog", backlog_date: today.value })
+                .update(payload)
                 .eq("isbn", book.value.isbn);
             if (err) throw new Error(err.message);
             const title = book.value.title;
@@ -657,12 +687,14 @@ export function useBookLog() {
         }
     }
 
-    async function startReadingFromLookup() {
+    async function startReadingFromLookup(format) {
         if (!book.value?.isbn) return;
         try {
+            const payload = { status: "in_progress", current_page: 0, started_date: today.value };
+            if (format) payload.format = format;
             const { error: err } = await supabase
                 .from("books")
-                .update({ status: "in_progress", current_page: 0, started_date: today.value })
+                .update(payload)
                 .eq("isbn", book.value.isbn);
             if (err) throw new Error(err.message);
             const title = book.value.title;
@@ -700,11 +732,10 @@ export function useBookLog() {
     }
 
     async function updateProgress(isbnVal, currentPageInput, currentPageCurrent) {
-        const page = parsePageInput(
-            currentPageInput,
-            currentPageCurrent ?? 0,
-        );
+        const prevPage = currentPageCurrent ?? 0;
+        const page = parsePageInput(currentPageInput, prevPage);
         if (page === null || page < 0) return;
+        const delta = page - prevPage;
         try {
             const { data: updated, error: err } = await supabase
                 .from("books")
@@ -713,6 +744,16 @@ export function useBookLog() {
                 .select()
                 .single();
             if (err) return;
+
+            // Record the page delta for stats tracking
+            if (delta !== 0) {
+                await supabase.from("progress_events").insert({
+                    isbn: isbnVal,
+                    date: today.value,
+                    delta,
+                });
+            }
+
             const idx = inProgress.value.findIndex((b) => b.isbn === isbnVal);
             if (idx !== -1) {
                 inProgress.value = [
@@ -723,7 +764,28 @@ export function useBookLog() {
             } else {
                 await loadInProgress();
             }
-            await loadActivityDates();
+            await Promise.all([
+                loadActivityDates(),
+                loadStats(),
+                loadMonthSummary(calendarYear.value, calendarMonth.value),
+            ]);
+        } catch {}
+    }
+
+    async function updateFormat(isbnVal, fmt) {
+        const newFormat = fmt || null;
+        try {
+            const { error: err } = await supabase
+                .from("books")
+                .update({ format: newFormat })
+                .eq("isbn", isbnVal);
+            if (err) return;
+            for (const list of [inProgress, backlog, finished]) {
+                const idx = list.value.findIndex((b) => b.isbn === isbnVal);
+                if (idx !== -1) {
+                    list.value[idx] = { ...list.value[idx], format: newFormat };
+                }
+            }
         } catch {}
     }
 
@@ -926,6 +988,7 @@ export function useBookLog() {
             publish_date: b.publish_date ?? undefined,
             number_of_pages: b.number_of_pages != null ? Number(b.number_of_pages) : undefined,
             description: b.description ?? undefined,
+            format: b.format || null,
             status: b.status ?? undefined,
             current_page: b.current_page != null ? Number(b.current_page) : undefined,
             started_date:
@@ -1092,6 +1155,7 @@ export function useBookLog() {
         startReading,
         startReadingFromLookup,
         updateProgress,
+        updateFormat,
         openFinishModal,
         markFinishedFromLookup,
         confirmMarkFinished,

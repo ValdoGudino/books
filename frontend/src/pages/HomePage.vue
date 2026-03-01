@@ -26,7 +26,10 @@ const {
     isArticle,
     isPoem,
     openViewModal,
+    updateFormat,
 } = useBookLog();
+
+const formats = ['physical', 'ebook', 'audio', 'multi'];
 
 const isCurrentMonth = computed(() => {
     const now = new Date();
@@ -139,6 +142,9 @@ onMounted(() => {
                             <span v-if="item.authors?.length" class="list-authors">{{ item.authors.join(", ") }}</span>
                             <span v-if="item.started_date" class="list-date">Started {{ formatDate(item.started_date) }}</span>
                             <span v-if="item.last_progress_date" class="list-date">Last updated {{ formatDate(item.last_progress_date) }}</span>
+                            <div class="format-tags" @click.stop>
+                                <button v-for="f in formats" :key="f" type="button" :class="['badge-format', `badge-format-${f}`, { active: item.format === f }]" @click="updateFormat(item.isbn, item.format === f ? null : f)">{{ f }}</button>
+                            </div>
                             <div class="progress-bar-wrap" @click.stop>
                                 <input
                                     type="text"
@@ -179,6 +185,9 @@ onMounted(() => {
                             <span v-if="item.authors?.length" class="list-authors">{{ item.authors.join(", ") }}</span>
                             <span v-if="item.started_date" class="list-date">Started {{ formatDate(item.started_date) }}</span>
                             <span v-if="item.last_progress_date" class="list-date">Last updated {{ formatDate(item.last_progress_date) }}</span>
+                            <div class="format-tags" @click.stop>
+                                <button v-for="f in formats" :key="f" type="button" :class="['badge-format', `badge-format-${f}`, { active: item.format === f }]" @click="updateFormat(item.isbn, item.format === f ? null : f)">{{ f }}</button>
+                            </div>
                             <div class="progress-bar-wrap" @click.stop>
                                 <input
                                     type="text"
@@ -219,6 +228,9 @@ onMounted(() => {
                             <span v-if="item.authors?.length" class="list-authors">{{ item.authors.join(", ") }}</span>
                             <span v-if="item.started_date" class="list-date">Started {{ formatDate(item.started_date) }}</span>
                             <span v-if="item.last_progress_date" class="list-date">Last updated {{ formatDate(item.last_progress_date) }}</span>
+                            <div class="format-tags" @click.stop>
+                                <button v-for="f in formats" :key="f" type="button" :class="['badge-format', `badge-format-${f}`, { active: item.format === f }]" @click="updateFormat(item.isbn, item.format === f ? null : f)">{{ f }}</button>
+                            </div>
                             <div class="progress-bar-wrap" @click.stop>
                                 <input
                                     type="text"

@@ -9,7 +9,10 @@ const {
     openEdit,
     deleteFromRead,
     openViewModal,
+    updateFormat,
 } = useBookLog();
+
+const formats = ['physical', 'ebook', 'audio', 'multi'];
 </script>
 
 <template>
