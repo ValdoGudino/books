@@ -16,6 +16,7 @@ const {
     viewBookItem,
     closeViewModal,
     clearBook,
+    confirmationMessage,
     init,
 } = useBookLog();
 
@@ -102,6 +103,11 @@ onUnmounted(() => document.removeEventListener("keydown", handleGlobalKeydown));
     <main>
         <router-view />
     </main>
+
+    <!-- Confirmation toast -->
+    <div v-if="confirmationMessage" class="confirmation-toast">
+        {{ confirmationMessage }}
+    </div>
 
     <!-- Finish date modal -->
     <div

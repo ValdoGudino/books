@@ -1,22 +1,5 @@
 import { ref, computed } from "vue";
-import { useAuth } from "./useAuth";
 import { supabase } from "../lib/supabase";
-
-const { getAccessToken } = useAuth();
-
-/** Build headers with JSON content type and Supabase auth token. */
-function authHeaders(extra = {}) {
-    const headers = { "Content-Type": "application/json", ...extra };
-    const token = getAccessToken();
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    return headers;
-}
-
-/** Wrapper around fetch that attaches the auth token. */
-async function authFetch(url, opts = {}) {
-    const headers = authHeaders(opts.headers);
-    return fetch(url, { ...opts, headers });
-}
 
 // Shared state (module-level so all pages see the same data)
 const isbn = ref("");
@@ -71,6 +54,7 @@ const authorQuery = ref("");
 const searchResults = ref([]);
 const monthSummary = ref({ pages_read: 0, pages_recorded: 0, items_finished: [], dates: [] });
 const viewBookItem = ref(null);
+const confirmationMessage = ref(null);
 
 export function useBookLog() {
     const canSubmit = computed(() => {
@@ -210,21 +194,84 @@ export function useBookLog() {
     async function loadStats() {
         try {
             const clientToday = new Date().toISOString().slice(0, 10);
-            const res = await authFetch(`/api/books/stats?today=${encodeURIComponent(clientToday)}`);
-            if (res.ok) stats.value = await res.json();
+            const year = parseInt(clientToday.slice(0, 4));
+            const month = parseInt(clientToday.slice(5, 7));
+            const startOfMonth = `${year}-${String(month).padStart(2, "0")}-01`;
+            const startOfYear = `${year}-01-01`;
+
+            const { data: finishedItems, error: err } = await supabase
+                .from("books")
+                .select("entry_type, number_of_pages, finished_date")
+                .eq("status", "finished");
+
+            if (err || !finishedItems) return;
+
+            let books_finished_count = 0;
+            let articles_finished_count = 0;
+            let poems_finished_count = 0;
+            let pages_from_finished_month = 0;
+            let pages_from_finished_year = 0;
+
+            for (const item of finishedItems) {
+                const type = item.entry_type || "book";
+                if (type === "book") books_finished_count++;
+                else if (type === "article") articles_finished_count++;
+                else if (type === "poem") poems_finished_count++;
+
+                const pages = typeof item.number_of_pages === "number" ? item.number_of_pages : 0;
+                const fd = item.finished_date ? String(item.finished_date).slice(0, 10) : null;
+                if (fd && fd >= startOfMonth) pages_from_finished_month += pages;
+                if (fd && fd >= startOfYear) pages_from_finished_year += pages;
+            }
+
+            stats.value = {
+                pages_this_month: pages_from_finished_month,
+                pages_this_year: pages_from_finished_year,
+                pages_from_finished_this_month: pages_from_finished_month,
+                pages_from_finished_this_year: pages_from_finished_year,
+                pages_recorded_this_month: 0,
+                pages_recorded_this_year: 0,
+                books_finished_count,
+                articles_finished_count,
+                poems_finished_count,
+                items_finished_count: finishedItems.length,
+            };
         } catch {}
     }
 
     async function loadActivityDates() {
         try {
-            const res = await authFetch("/api/reading-activity/dates");
-            if (res.ok) {
-                const data = await res.json();
-                const dates = Array.isArray(data.dates) ? data.dates : [];
-                activityDates.value = dates.map((d) => String(d).slice(0, 10));
-            } else {
-                activityDates.value = [];
+            const todayStr = new Date().toISOString().slice(0, 10);
+            const { data, error: err } = await supabase
+                .from("books")
+                .select("started_date, finished_date, last_progress_date")
+                .or("started_date.not.is.null,finished_date.not.is.null,last_progress_date.not.is.null");
+
+            const computed = new Set();
+            if (!err && data) {
+                for (const doc of data) {
+                    for (const key of ["started_date", "finished_date", "last_progress_date"]) {
+                        const val = doc[key];
+                        if (val) {
+                            const dateStr = String(val).slice(0, 10);
+                            if (dateStr <= todayStr) computed.add(dateStr);
+                        }
+                    }
+                }
             }
+
+            const result = new Set(computed);
+            const { data: overrides } = await supabase
+                .from("calendar_overrides")
+                .select("date, show");
+            if (overrides) {
+                for (const o of overrides) {
+                    if (o.show) result.add(o.date);
+                    else result.delete(o.date);
+                }
+            }
+
+            activityDates.value = [...result].sort();
         } catch {
             activityDates.value = [];
         }
@@ -233,17 +280,10 @@ export function useBookLog() {
     async function toggleCalendarDay(dateStr) {
         const currentlyActive = activityDates.value.includes(dateStr);
         try {
-            const res = await authFetch("/api/reading-activity/calendar-override", {
-                method: "PUT",
-                body: JSON.stringify({ date: dateStr, show: !currentlyActive }),
-            });
-            if (res.ok) {
-                const data = await res.json();
-                const next = Array.isArray(data.dates) ? data.dates.map((d) => String(d).slice(0, 10)) : [];
-                activityDates.value = next;
-            } else {
-                await loadActivityDates();
-            }
+            await supabase
+                .from("calendar_overrides")
+                .upsert({ date: dateStr, show: !currentlyActive }, { onConflict: "date" });
+            await loadActivityDates();
         } catch {
             await loadActivityDates();
         }
@@ -265,22 +305,48 @@ export function useBookLog() {
     }
 
     async function loadMonthSummary(year, month) {
-        const m = typeof month === "number" ? month + 1 : month; // 0-11 -> 1-12 for API
+        const m = typeof month === "number" ? month + 1 : month; // 0-11 -> 1-12
+        const startDate = `${year}-${String(m).padStart(2, "0")}-01`;
+        const lastDay = new Date(year, m, 0).getDate();
+        const endDate = `${year}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
         try {
-            const res = await authFetch(
-                `/api/reading-activity/month?year=${encodeURIComponent(year)}&month=${encodeURIComponent(m)}`,
+            const { data: finishedItems } = await supabase
+                .from("books")
+                .select("*")
+                .eq("status", "finished")
+                .gte("finished_date", startDate)
+                .lte("finished_date", endDate);
+
+            const items = finishedItems || [];
+            const pagesRead = items.reduce(
+                (sum, item) => sum + (typeof item.number_of_pages === "number" ? item.number_of_pages : 0),
+                0,
             );
-            if (res.ok) {
-                const data = await res.json();
-                monthSummary.value = {
-                    pages_read: data.pages_read ?? 0,
-                    pages_recorded: data.pages_recorded ?? 0,
-                    items_finished: data.items_finished ?? [],
-                    dates: data.dates ?? [],
-                };
-            } else {
-                monthSummary.value = { pages_read: 0, pages_recorded: 0, items_finished: [], dates: [] };
+
+            const { data: activityBooks } = await supabase
+                .from("books")
+                .select("started_date, finished_date, last_progress_date")
+                .or("started_date.not.is.null,finished_date.not.is.null,last_progress_date.not.is.null");
+
+            const datesInMonth = new Set();
+            if (activityBooks) {
+                for (const doc of activityBooks) {
+                    for (const key of ["started_date", "finished_date", "last_progress_date"]) {
+                        const val = doc[key];
+                        if (val) {
+                            const ds = String(val).slice(0, 10);
+                            if (ds >= startDate && ds <= endDate) datesInMonth.add(ds);
+                        }
+                    }
+                }
             }
+
+            monthSummary.value = {
+                pages_read: pagesRead,
+                pages_recorded: 0,
+                items_finished: items,
+                dates: [...datesInMonth].sort(),
+            };
         } catch {
             monthSummary.value = { pages_read: 0, pages_recorded: 0, items_finished: [], dates: [] };
         }
@@ -438,12 +504,13 @@ export function useBookLog() {
             const params = new URLSearchParams();
             if (titleQuery.value.trim()) params.set("title", titleQuery.value.trim());
             if (authorQuery.value.trim()) params.set("author", authorQuery.value.trim());
-            const res = await authFetch(`/api/books/search?${params}`);
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                throw new Error(data.detail || res.statusText || "Search failed");
-            }
-            searchResults.value = await res.json();
+            const { data, error: fnError } = await supabase.functions.invoke(
+                `book-search?${params}`,
+                { method: "GET" },
+            );
+            if (fnError) throw new Error(fnError.message || "Search failed");
+            if (data?.error) throw new Error(data.error);
+            searchResults.value = Array.isArray(data) ? data : [];
             if (searchResults.value.length === 0) {
                 error.value = "No books found for that search.";
             }
@@ -495,7 +562,12 @@ export function useBookLog() {
                 .update({ status: "backlog", backlog_date: today.value })
                 .eq("isbn", book.value.isbn);
             if (err) throw new Error(err.message);
+            const title = book.value.title;
+            book.value = null;
             await refreshReadingLog();
+            await loadHistory();
+            confirmationMessage.value = `"${title}" added to backlog`;
+            setTimeout(() => { confirmationMessage.value = null; }, 3000);
         } catch (e) {
             error.value = e.message;
         }
@@ -522,7 +594,12 @@ export function useBookLog() {
                 .update({ status: "in_progress", current_page: 0, started_date: today.value })
                 .eq("isbn", book.value.isbn);
             if (err) throw new Error(err.message);
+            const title = book.value.title;
+            book.value = null;
             await refreshReadingLog();
+            await loadHistory();
+            confirmationMessage.value = `Started reading "${title}"`;
+            setTimeout(() => { confirmationMessage.value = null; }, 3000);
         } catch (e) {
             error.value = e.message;
         }
@@ -560,7 +637,7 @@ export function useBookLog() {
         try {
             const { data: updated, error: err } = await supabase
                 .from("books")
-                .update({ current_page: page })
+                .update({ current_page: page, last_progress_date: today.value })
                 .eq("isbn", isbnVal)
                 .select()
                 .single();
@@ -930,6 +1007,7 @@ export function useBookLog() {
         openViewModal,
         closeViewModal,
         clearBook,
+        confirmationMessage,
         init,
     };
 }
