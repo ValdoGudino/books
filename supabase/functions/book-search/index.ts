@@ -59,6 +59,62 @@ function isbnFromGoogleItem(vi: Record<string, unknown>): string {
   return isbn10?.identifier ?? "";
 }
 
+async function searchOpenLibrary(
+  title: string,
+  author: string,
+): Promise<ReturnType<typeof extractBook>[]> {
+  try {
+    const params = new URLSearchParams();
+    if (title) params.set("title", title);
+    if (author) params.set("author", author);
+    params.set("limit", "10");
+
+    const resp = await fetch(
+      `https://openlibrary.org/search.json?${params.toString()}`,
+    );
+    if (!resp.ok) return [];
+
+    const data = await resp.json();
+    const docs = data.docs ?? [];
+
+    return docs
+      .map(
+        (doc: Record<string, unknown>) => {
+          const isbns = (doc.isbn as string[]) ?? [];
+          const isbn13 = isbns.find((i) => i.length === 13) ?? "";
+          const isbn10 = isbns.find((i) => i.length === 10) ?? "";
+          const isbn = isbn13 || isbn10;
+          const coverI = doc.cover_i as number | undefined;
+          const coverUrl = coverI
+            ? `https://covers.openlibrary.org/b/id/${coverI}-M.jpg`
+            : null;
+          const authors = (doc.author_name as string[]) ?? [];
+          const publishers = (doc.publisher as string[]) ?? [];
+          const publishYear = doc.first_publish_year as number | undefined;
+          const pages = doc.number_of_pages_median as number | undefined;
+          const subjects = ((doc.subject as string[]) ?? []).slice(0, 5);
+
+          return {
+            isbn,
+            title: (doc.title as string) ?? "Unknown",
+            authors: authors.length ? authors : ["Unknown"],
+            publishers: publishers.slice(0, 3),
+            publish_date: publishYear ? String(publishYear) : null,
+            number_of_pages: pages ?? null,
+            cover_url: coverUrl,
+            subjects,
+            description: null,
+          };
+        },
+      )
+      .filter(
+        (b: { title: string }) => b.title !== "Unknown",
+      );
+  } catch {
+    return [];
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -99,22 +155,27 @@ Deno.serve(async (req) => {
   let searchUrl = `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(q)}&maxResults=10`;
   if (GOOGLE_BOOKS_API_KEY) searchUrl += `&key=${GOOGLE_BOOKS_API_KEY}`;
 
-  const resp = await fetch(searchUrl);
-  if (!resp.ok) {
-    const text = await resp.text();
-    return jsonResponse(
-      { error: `Google Books API error (${resp.status}): ${text}` },
-      502,
-    );
+  let results: ReturnType<typeof extractBook>[] = [];
+
+  try {
+    const resp = await fetch(searchUrl);
+    if (resp.ok) {
+      const data = await resp.json();
+      const items = data.items ?? [];
+      results = items.map((item: Record<string, unknown>) => {
+        const vi = (item.volumeInfo ?? {}) as Record<string, unknown>;
+        const isbn = isbnFromGoogleItem(vi);
+        return extractBook(item, isbn);
+      });
+    }
+  } catch {
+    // Google Books failed — fall through to Open Library
   }
 
-  const data = await resp.json();
-  const items = data.items ?? [];
-  const results = items.map((item: Record<string, unknown>) => {
-    const vi = (item.volumeInfo ?? {}) as Record<string, unknown>;
-    const isbn = isbnFromGoogleItem(vi);
-    return extractBook(item, isbn);
-  });
+  // Fall back to Open Library search if Google returned nothing
+  if (results.length === 0) {
+    results = await searchOpenLibrary(title, author);
+  }
 
   return jsonResponse(results);
 });

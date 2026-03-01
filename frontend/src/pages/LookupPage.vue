@@ -37,6 +37,7 @@ const {
     submitArticle,
     submitPoem,
     clearBook,
+    openLightbox,
 } = useBookLog();
 
 const bookDescExpanded = ref(false);
@@ -215,7 +216,7 @@ watch(book, () => { bookDescExpanded.value = false; });
             <div class="modal modal-wide">
                 <h3 class="modal-title">{{ book.title }}</h3>
                 <div class="view-modal-body">
-                    <img v-if="book.cover_url" :src="book.cover_url" :alt="book.title" class="view-modal-cover" />
+                    <img v-if="book.cover_url" :src="book.cover_url" :alt="book.title" class="view-modal-cover cover-clickable" @click="openLightbox(book.cover_url, book.isbn)" />
                     <div class="view-modal-details">
                         <p v-if="book.isbn" class="meta"><span class="meta-label">ISBN</span> {{ book.isbn }}</p>
                         <p v-if="book.authors?.length" class="meta"><span class="meta-label">Authors</span> {{ book.authors.join(", ") }}</p>
