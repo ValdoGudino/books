@@ -2,6 +2,7 @@ import { ref, computed } from "vue";
 import { useAuth } from "./useAuth";
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 const { getAccessToken } = useAuth();
 
@@ -10,6 +11,7 @@ function authHeaders(extra = {}) {
     const headers = { "Content-Type": "application/json", ...extra };
     const token = getAccessToken();
     if (token) headers["Authorization"] = `Bearer ${token}`;
+    headers["apikey"] = SUPABASE_ANON_KEY;
     return headers;
 }
 
