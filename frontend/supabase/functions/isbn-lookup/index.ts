@@ -47,11 +47,16 @@ function extractBook(item: Record<string, unknown>, isbn: string) {
     number_of_pages: pageCount ?? null,
     cover_url: thumbnail,
     subjects: categories,
-    description: typeof vi.description === "string" ? vi.description.trim() || null : null,
+    description:
+      typeof vi.description === "string"
+        ? vi.description.trim() || null
+        : null,
   };
 }
 
-async function fetchOpenLibraryPageCount(isbn: string): Promise<number | null> {
+async function fetchOpenLibraryPageCount(
+  isbn: string,
+): Promise<number | null> {
   try {
     const resp = await fetch(`https://openlibrary.org/isbn/${isbn}.json`);
     if (!resp.ok) return null;
@@ -75,7 +80,10 @@ Deno.serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: authHeader } },
   });
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
   if (authError || !user) {
     return jsonResponse({ error: "Unauthorized" }, 401);
   }
@@ -83,7 +91,6 @@ Deno.serve(async (req) => {
   // Extract ISBN from URL path: /isbn-lookup/9780123456789
   const url = new URL(req.url);
   const segments = url.pathname.split("/").filter(Boolean);
-  // Path is like /isbn-lookup/<isbn>
   const rawIsbn = segments[segments.length - 1];
 
   if (!rawIsbn || rawIsbn === "isbn-lookup") {
@@ -96,6 +103,22 @@ Deno.serve(async (req) => {
       { error: "Invalid ISBN: must contain only digits" },
       400,
     );
+  }
+
+  // Check cache first
+  const { data: cached } = await supabase
+    .from("books")
+    .select("*")
+    .eq("isbn", isbn)
+    .single();
+
+  if (cached) {
+    // Touch last_looked_up timestamp
+    await supabase
+      .from("books")
+      .update({ last_looked_up: new Date().toISOString() })
+      .eq("isbn", isbn);
+    return jsonResponse(cached);
   }
 
   // Fetch from Google Books
@@ -121,6 +144,12 @@ Deno.serve(async (req) => {
     const olPages = await fetchOpenLibraryPageCount(isbn);
     if (olPages) result.number_of_pages = olPages;
   }
+
+  // Save to cache
+  await supabase.from("books").upsert({
+    ...result,
+    last_looked_up: new Date().toISOString(),
+  });
 
   return jsonResponse(result);
 });

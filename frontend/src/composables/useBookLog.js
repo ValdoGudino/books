@@ -156,8 +156,13 @@ export function useBookLog() {
 
     async function loadHistory() {
         try {
-            const res = await authFetch("/api/books/history");
-            if (res.ok) history.value = await res.json();
+            const { data, error: err } = await supabase
+                .from("books")
+                .select("*")
+                .not("last_looked_up", "is", null)
+                .order("last_looked_up", { ascending: false })
+                .limit(20);
+            if (!err && data) history.value = data;
         } catch {
             history.value = [];
         }
@@ -165,8 +170,12 @@ export function useBookLog() {
 
     async function loadBacklog() {
         try {
-            const res = await authFetch("/api/books/backlog");
-            if (res.ok) backlog.value = await res.json();
+            const { data, error: err } = await supabase
+                .from("books")
+                .select("*")
+                .eq("status", "backlog")
+                .order("backlog_order", { ascending: true });
+            if (!err && data) backlog.value = data;
         } catch {
             backlog.value = [];
         }
@@ -174,8 +183,12 @@ export function useBookLog() {
 
     async function loadInProgress() {
         try {
-            const res = await authFetch("/api/books/in-progress");
-            if (res.ok) inProgress.value = await res.json();
+            const { data, error: err } = await supabase
+                .from("books")
+                .select("*")
+                .eq("status", "in_progress")
+                .order("started_date", { ascending: false });
+            if (!err && data) inProgress.value = data;
         } catch {
             inProgress.value = [];
         }
@@ -183,8 +196,12 @@ export function useBookLog() {
 
     async function loadFinished() {
         try {
-            const res = await authFetch("/api/books/finished");
-            if (res.ok) finished.value = await res.json();
+            const { data, error: err } = await supabase
+                .from("books")
+                .select("*")
+                .eq("status", "finished")
+                .order("finished_date", { ascending: false });
+            if (!err && data) finished.value = data;
         } catch {
             finished.value = [];
         }
@@ -235,8 +252,11 @@ export function useBookLog() {
     async function deleteFromRead(isbnVal) {
         if (!confirm("Delete this item and clear it from history? This cannot be undone.")) return;
         try {
-            const res = await authFetch(`/api/books/${encodeURIComponent(isbnVal)}`, { method: "DELETE" });
-            if (!res.ok) throw new Error("Failed");
+            const { error: err } = await supabase
+                .from("books")
+                .delete()
+                .eq("isbn", isbnVal);
+            if (err) throw new Error(err.message);
             await refreshReadingLog();
             await loadHistory();
         } catch (e) {
@@ -307,15 +327,21 @@ export function useBookLog() {
                 publish_date: (articleForm.value.publish_date || "").trim() || undefined,
                 description: (articleForm.value.description || "").trim() || undefined,
             };
-            const res = await authFetch("/api/articles", {
-                method: "POST",
-
-                body: JSON.stringify(body),
+            const articleId = `article-${crypto.randomUUID().replace(/-/g, "")}`;
+            const { error: err } = await supabase.from("books").insert({
+                isbn: articleId,
+                entry_type: "article",
+                title: body.title,
+                authors: body.authors || ["Unknown"],
+                publishers: [],
+                subjects: [],
+                status: body.status || "backlog",
+                number_of_pages: body.number_of_pages || null,
+                publish_date: body.publish_date || null,
+                description: body.description || null,
+                backlog_date: today.value,
             });
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                throw new Error(data.detail || res.statusText || "Failed to add article");
-            }
+            if (err) throw new Error(err.message);
             articleForm.value = {
                 title: "", authors: "", status: "backlog", number_of_pages: "",
                 publish_date: "", description: "",
@@ -353,15 +379,21 @@ export function useBookLog() {
                 publish_date: (poemForm.value.publish_date || "").trim() || undefined,
                 description: (poemForm.value.description || "").trim() || undefined,
             };
-            const res = await authFetch("/api/articles", {
-                method: "POST",
-
-                body: JSON.stringify(body),
+            const poemId = `article-${crypto.randomUUID().replace(/-/g, "")}`;
+            const { error: err } = await supabase.from("books").insert({
+                isbn: poemId,
+                entry_type: "poem",
+                title: body.title,
+                authors: body.authors || ["Unknown"],
+                publishers: [],
+                subjects: [],
+                status: body.status || "backlog",
+                number_of_pages: body.number_of_pages || null,
+                publish_date: body.publish_date || null,
+                description: body.description || null,
+                backlog_date: today.value,
             });
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                throw new Error(data.detail || res.statusText || "Failed to add poem");
-            }
+            if (err) throw new Error(err.message);
             poemForm.value = {
                 title: "", authors: "", status: "backlog", number_of_pages: "",
                 publish_date: "", description: "",
@@ -458,13 +490,11 @@ export function useBookLog() {
     async function addToBacklog() {
         if (!book.value?.isbn) return;
         try {
-            const res = await authFetch("/api/books/backlog", {
-                method: "POST",
-
-                body: JSON.stringify({ isbn: book.value.isbn }),
-            });
-            if (!res.ok)
-                throw new Error((await res.json().catch(() => ({}))).detail || "Failed");
+            const { error: err } = await supabase
+                .from("books")
+                .update({ status: "backlog", backlog_date: today.value })
+                .eq("isbn", book.value.isbn);
+            if (err) throw new Error(err.message);
             await refreshReadingLog();
         } catch (e) {
             error.value = e.message;
@@ -473,12 +503,11 @@ export function useBookLog() {
 
     async function startReading(isbnVal) {
         try {
-            const res = await authFetch(`/api/books/${encodeURIComponent(isbnVal)}`, {
-                method: "PATCH",
-
-                body: JSON.stringify({ status: "in_progress", current_page: 0 }),
-            });
-            if (!res.ok) throw new Error("Failed");
+            const { error: err } = await supabase
+                .from("books")
+                .update({ status: "in_progress", current_page: 0, started_date: today.value })
+                .eq("isbn", isbnVal);
+            if (err) throw new Error(err.message);
             await refreshReadingLog();
         } catch {
             error.value = "Failed to start reading";
@@ -488,17 +517,11 @@ export function useBookLog() {
     async function startReadingFromLookup() {
         if (!book.value?.isbn) return;
         try {
-            const addRes = await authFetch("/api/books/backlog", {
-                method: "POST",
-
-                body: JSON.stringify({ isbn: book.value.isbn }),
-            });
-            if (!addRes.ok) throw new Error("Add failed");
-            await authFetch(`/api/books/${encodeURIComponent(book.value.isbn)}`, {
-                method: "PATCH",
-
-                body: JSON.stringify({ status: "in_progress", current_page: 0 }),
-            });
+            const { error: err } = await supabase
+                .from("books")
+                .update({ status: "in_progress", current_page: 0, started_date: today.value })
+                .eq("isbn", book.value.isbn);
+            if (err) throw new Error(err.message);
             await refreshReadingLog();
         } catch (e) {
             error.value = e.message;
@@ -535,13 +558,13 @@ export function useBookLog() {
         );
         if (page === null || page < 0) return;
         try {
-            const res = await authFetch(`/api/books/${encodeURIComponent(isbnVal)}`, {
-                method: "PATCH",
-
-                body: JSON.stringify({ current_page: page }),
-            });
-            if (!res.ok) return;
-            const updated = await res.json();
+            const { data: updated, error: err } = await supabase
+                .from("books")
+                .update({ current_page: page })
+                .eq("isbn", isbnVal)
+                .select()
+                .single();
+            if (err) return;
             const idx = inProgress.value.findIndex((b) => b.isbn === isbnVal);
             if (idx !== -1) {
                 inProgress.value = [
@@ -572,18 +595,11 @@ export function useBookLog() {
     async function confirmMarkFinished() {
         if (!editBook.value?.isbn || !finishDate.value) return;
         try {
-            const res = await authFetch(
-                `/api/books/${encodeURIComponent(editBook.value.isbn)}`,
-                {
-                    method: "PATCH",
-    
-                    body: JSON.stringify({
-                        status: "finished",
-                        finished_date: finishDate.value,
-                    }),
-                },
-            );
-            if (!res.ok) throw new Error("Failed");
+            const { error: err } = await supabase
+                .from("books")
+                .update({ status: "finished", finished_date: finishDate.value })
+                .eq("isbn", editBook.value.isbn);
+            if (err) throw new Error(err.message);
             showFinishModal.value = false;
             editBook.value = null;
             await refreshReadingLog();
@@ -595,12 +611,11 @@ export function useBookLog() {
     async function removeFromList(isbnVal) {
         if (!confirm("Remove from list? Progress (e.g. pages read) is kept.")) return;
         try {
-            const res = await authFetch(`/api/books/${encodeURIComponent(isbnVal)}`, {
-                method: "PATCH",
-
-                body: JSON.stringify({ status: null }),
-            });
-            if (!res.ok) throw new Error("Failed");
+            const { error: err } = await supabase
+                .from("books")
+                .update({ status: null })
+                .eq("isbn", isbnVal);
+            if (err) throw new Error(err.message);
             await refreshReadingLog();
         } catch (e) {
             error.value = e.message;
@@ -657,11 +672,10 @@ export function useBookLog() {
         reordered.splice(newIndex, 0, removed);
         const fullOrder = mergeBacklogOrder(backlog.value, reordered, sectionType);
         try {
-            await authFetch("/api/books/backlog/order", {
-                method: "PUT",
-
-                body: JSON.stringify({ isbns: fullOrder.map((i) => i.isbn) }),
-            });
+            const updates = fullOrder.map((item, idx) =>
+                supabase.from("books").update({ backlog_order: idx }).eq("isbn", item.isbn)
+            );
+            await Promise.all(updates);
             await loadBacklog();
         } catch {
             error.value = "Failed to reorder";
@@ -684,11 +698,10 @@ export function useBookLog() {
         reordered.splice(newIndex, 0, removed);
         const fullOrder = mergeBacklogOrder(backlog.value, reordered, sectionType);
         try {
-            await authFetch("/api/books/backlog/order", {
-                method: "PUT",
-
-                body: JSON.stringify({ isbns: fullOrder.map((i) => i.isbn) }),
-            });
+            const updates = fullOrder.map((item, idx) =>
+                supabase.from("books").update({ backlog_order: idx }).eq("isbn", item.isbn)
+            );
+            await Promise.all(updates);
             await loadBacklog();
         } catch {
             error.value = "Failed to reorder";
@@ -715,11 +728,10 @@ export function useBookLog() {
         reordered.splice(dropIndex, 0, removed);
         const fullOrder = mergeBacklogOrder(backlog.value, reordered, sectionType);
         try {
-            await authFetch("/api/books/backlog/order", {
-                method: "PUT",
-
-                body: JSON.stringify({ isbns: fullOrder.map((i) => i.isbn) }),
-            });
+            const updates = fullOrder.map((item, idx) =>
+                supabase.from("books").update({ backlog_order: idx }).eq("isbn", item.isbn)
+            );
+            await Promise.all(updates);
             await loadBacklog();
         } catch {
             error.value = "Failed to reorder";
@@ -768,17 +780,18 @@ export function useBookLog() {
                     : undefined,
         };
         try {
-            const res = await authFetch(`/api/books/${encodeURIComponent(b.isbn)}`, {
-                method: "PATCH",
-
-                body: JSON.stringify(payload),
-            });
-            if (!res.ok) throw new Error("Failed");
+            const { data: updated, error: err } = await supabase
+                .from("books")
+                .update(payload)
+                .eq("isbn", b.isbn)
+                .select()
+                .single();
+            if (err) throw new Error(err.message);
             editBookForEdit.value = null;
             await refreshReadingLog();
             await loadHistory();
             if (book.value?.isbn === b.isbn) {
-                book.value = await res.json();
+                book.value = updated;
             }
         } catch (e) {
             error.value = e.message;
