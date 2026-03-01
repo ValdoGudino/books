@@ -1,6 +1,8 @@
 import { ref, computed } from "vue";
 import { useAuth } from "./useAuth";
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+
 const { getAccessToken } = useAuth();
 
 /** Build headers with JSON content type and Supabase auth token. */
@@ -382,7 +384,7 @@ export function useBookLog() {
         loading.value = true;
         try {
             const cleaned = isbn.value.replace(/[\s-]/g, "");
-            const res = await authFetch(`/api/books/isbn/${encodeURIComponent(cleaned)}`);
+            const res = await authFetch(`${SUPABASE_URL}/functions/v1/isbn-lookup/${encodeURIComponent(cleaned)}`);
             if (!res.ok) {
                 const data = await res.json().catch(() => ({}));
                 throw new Error(data.detail || res.statusText || "Book not found");
@@ -438,7 +440,7 @@ export function useBookLog() {
         error.value = null;
         loading.value = true;
         try {
-            const res = await authFetch(`/api/books/isbn/${encodeURIComponent(book.value.isbn)}`);
+            const res = await authFetch(`${SUPABASE_URL}/functions/v1/isbn-lookup/${encodeURIComponent(book.value.isbn)}`);
             if (!res.ok) {
                 const data = await res.json().catch(() => ({}));
                 throw new Error(data.detail || res.statusText || "Refresh failed");
