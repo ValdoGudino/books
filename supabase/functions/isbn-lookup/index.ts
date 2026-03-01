@@ -67,6 +67,70 @@ async function fetchOpenLibraryPageCount(
   }
 }
 
+async function fetchOpenLibraryBook(
+  isbn: string,
+): Promise<ReturnType<typeof extractBook> | null> {
+  try {
+    const resp = await fetch(`https://openlibrary.org/isbn/${isbn}.json`);
+    if (!resp.ok) return null;
+    const data = await resp.json();
+
+    const title = data.title ?? "Unknown";
+    const pageCount = data.number_of_pages ?? null;
+    const publishDate = data.publish_date ?? null;
+    const description =
+      typeof data.description === "string"
+        ? data.description.trim() || null
+        : typeof data.description?.value === "string"
+          ? data.description.value.trim() || null
+          : null;
+    const subjects = Array.isArray(data.subjects)
+      ? data.subjects.map((s: string | { name: string }) =>
+          typeof s === "string" ? s : s.name,
+        )
+      : [];
+
+    // Resolve authors from author keys
+    const authorKeys: string[] = (data.authors ?? []).map(
+      (a: { key: string }) => a.key,
+    );
+    const authors: string[] = [];
+    for (const key of authorKeys) {
+      try {
+        const aResp = await fetch(`https://openlibrary.org${key}.json`);
+        if (aResp.ok) {
+          const aData = await aResp.json();
+          if (aData.name) authors.push(aData.name);
+        }
+      } catch {
+        // skip unresolvable author
+      }
+    }
+
+    // Resolve publishers from the edition
+    const publishers: string[] = Array.isArray(data.publishers)
+      ? data.publishers
+      : [];
+
+    // Cover image
+    const coverUrl = `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`;
+
+    return {
+      isbn,
+      title,
+      authors: authors.length ? authors : ["Unknown"],
+      publishers,
+      publish_date: publishDate,
+      number_of_pages: pageCount,
+      cover_url: coverUrl,
+      subjects,
+      description,
+    };
+  } catch {
+    return null;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -126,27 +190,34 @@ Deno.serve(async (req) => {
   }
 
   // Fetch from Google Books
-  const gbResp = await fetch(googleBooksUrl(isbn));
-  if (!gbResp.ok) {
-    const text = await gbResp.text();
-    return jsonResponse(
-      { error: `Google Books API error (${gbResp.status}): ${text}` },
-      502,
-    );
+  let result: ReturnType<typeof extractBook> | null = null;
+
+  try {
+    const gbResp = await fetch(googleBooksUrl(isbn));
+    if (gbResp.ok) {
+      const gbData = await gbResp.json();
+      const items = gbData.items ?? [];
+      if (items.length > 0) {
+        result = extractBook(items[0], isbn);
+
+        // Patch missing page count from Open Library
+        if (!result.number_of_pages) {
+          const olPages = await fetchOpenLibraryPageCount(isbn);
+          if (olPages) result.number_of_pages = olPages;
+        }
+      }
+    }
+  } catch {
+    // Google Books failed — fall through to Open Library
   }
 
-  const gbData = await gbResp.json();
-  const items = gbData.items ?? [];
-  if (items.length === 0) {
+  // Fall back to Open Library if Google Books had no results
+  if (!result) {
+    result = await fetchOpenLibraryBook(isbn);
+  }
+
+  if (!result) {
     return jsonResponse({ error: "Book not found for this ISBN" }, 404);
-  }
-
-  const result = extractBook(items[0], isbn);
-
-  // Patch missing page count from Open Library
-  if (!result.number_of_pages) {
-    const olPages = await fetchOpenLibraryPageCount(isbn);
-    if (olPages) result.number_of_pages = olPages;
   }
 
   // Save to cache (include user_id for composite PK)
