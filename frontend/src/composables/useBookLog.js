@@ -383,7 +383,7 @@ export function useBookLog() {
         loading.value = true;
         try {
             const cleaned = isbn.value.replace(/[\s-]/g, "");
-            const { data, error: fnError } = await supabase.functions.invoke(`isbn-lookup/${cleaned}`);
+            const { data, error: fnError } = await supabase.functions.invoke(`isbn-lookup/${cleaned}`, { method: 'GET' });
             if (fnError) throw new Error(fnError.message || "Book not found");
             if (data?.error) throw new Error(data.error);
             book.value = data;
@@ -437,7 +437,7 @@ export function useBookLog() {
         error.value = null;
         loading.value = true;
         try {
-            const { data, error: fnError } = await supabase.functions.invoke(`isbn-lookup/${book.value.isbn}`);
+            const { data, error: fnError } = await supabase.functions.invoke(`isbn-lookup/${book.value.isbn}`, { method: 'GET' });
             if (fnError) throw new Error(fnError.message || "Refresh failed");
             if (data?.error) throw new Error(data.error);
             book.value = data;
