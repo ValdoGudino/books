@@ -1,8 +1,6 @@
 import { ref, computed } from "vue";
 import { useAuth } from "./useAuth";
-
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+import { supabase } from "../lib/supabase";
 
 const { getAccessToken } = useAuth();
 
@@ -11,7 +9,6 @@ function authHeaders(extra = {}) {
     const headers = { "Content-Type": "application/json", ...extra };
     const token = getAccessToken();
     if (token) headers["Authorization"] = `Bearer ${token}`;
-    headers["apikey"] = SUPABASE_ANON_KEY;
     return headers;
 }
 
@@ -386,12 +383,10 @@ export function useBookLog() {
         loading.value = true;
         try {
             const cleaned = isbn.value.replace(/[\s-]/g, "");
-            const res = await authFetch(`${SUPABASE_URL}/functions/v1/isbn-lookup/${encodeURIComponent(cleaned)}`);
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                throw new Error(data.detail || res.statusText || "Book not found");
-            }
-            book.value = await res.json();
+            const { data, error: fnError } = await supabase.functions.invoke(`isbn-lookup/${cleaned}`);
+            if (fnError) throw new Error(fnError.message || "Book not found");
+            if (data?.error) throw new Error(data.error);
+            book.value = data;
             await loadHistory();
             await refreshReadingLog();
         } catch (e) {
@@ -442,12 +437,10 @@ export function useBookLog() {
         error.value = null;
         loading.value = true;
         try {
-            const res = await authFetch(`${SUPABASE_URL}/functions/v1/isbn-lookup/${encodeURIComponent(book.value.isbn)}`);
-            if (!res.ok) {
-                const data = await res.json().catch(() => ({}));
-                throw new Error(data.detail || res.statusText || "Refresh failed");
-            }
-            book.value = await res.json();
+            const { data, error: fnError } = await supabase.functions.invoke(`isbn-lookup/${book.value.isbn}`);
+            if (fnError) throw new Error(fnError.message || "Refresh failed");
+            if (data?.error) throw new Error(data.error);
+            book.value = data;
             await loadHistory();
             await refreshReadingLog();
         } catch (e) {
