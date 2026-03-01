@@ -75,7 +75,10 @@ onUnmounted(() => document.removeEventListener("keydown", handleGlobalKeydown));
                 <h1 class="app-title">Book Log</h1>
                 <p class="app-tagline">Look up books and track your reading</p>
             </div>
-            <button type="button" class="btn-small btn-ghost" @click="handleSignOut">Sign out</button>
+            <div class="header-user">
+                <span class="user-name">{{ user.user_metadata?.full_name || user.email }}</span>
+                <button type="button" class="btn-small btn-ghost" @click="handleSignOut">Sign out</button>
+            </div>
         </div>
         <nav class="app-nav">
             <router-link to="/" class="nav-link" active-class="router-link-active" exact-active-class="router-link-active">
