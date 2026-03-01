@@ -1,6 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const GOOGLE_BOOKS_API_KEY = Deno.env.get("GOOGLE_BOOKS_API_KEY") ?? "";
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") ?? "";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -62,6 +65,19 @@ async function fetchOpenLibraryPageCount(isbn: string): Promise<number | null> {
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  // Verify the user is authenticated
+  const authHeader = req.headers.get("Authorization");
+  if (!authHeader) {
+    return jsonResponse({ error: "Missing authorization header" }, 401);
+  }
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: authHeader } },
+  });
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    return jsonResponse({ error: "Unauthorized" }, 401);
   }
 
   // Extract ISBN from URL path: /isbn-lookup/9780123456789
