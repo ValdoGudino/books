@@ -105,20 +105,24 @@ Deno.serve(async (req) => {
     );
   }
 
-  // Check cache first (RLS scopes to current user automatically)
-  const { data: cached } = await supabase
-    .from("books")
-    .select("*")
-    .eq("isbn", isbn)
-    .maybeSingle();
+  const refresh = url.searchParams.get("refresh") === "1";
 
-  if (cached) {
-    // Touch last_looked_up timestamp
-    await supabase
+  // Check cache first (RLS scopes to current user automatically)
+  if (!refresh) {
+    const { data: cached } = await supabase
       .from("books")
-      .update({ last_looked_up: new Date().toISOString() })
-      .eq("isbn", isbn);
-    return jsonResponse(cached);
+      .select("*")
+      .eq("isbn", isbn)
+      .maybeSingle();
+
+    if (cached) {
+      // Touch last_looked_up timestamp
+      await supabase
+        .from("books")
+        .update({ last_looked_up: new Date().toISOString() })
+        .eq("isbn", isbn);
+      return jsonResponse(cached);
+    }
   }
 
   // Fetch from Google Books

@@ -490,6 +490,27 @@ export function useBookLog() {
         loading.value = true;
         try {
             const cleaned = isbn.value.replace(/[\s-]/g, "");
+
+            // Check local DB first - skip edge function entirely if we already have it
+            const { data: cached } = await supabase
+                .from("books")
+                .select("*")
+                .eq("isbn", cleaned)
+                .maybeSingle();
+
+            if (cached) {
+                book.value = cached;
+                // Touch last_looked_up in background
+                supabase
+                    .from("books")
+                    .update({ last_looked_up: new Date().toISOString() })
+                    .eq("isbn", cleaned)
+                    .then(() => loadHistory());
+                await refreshReadingLog();
+                return;
+            }
+
+            // Not in DB - fetch via edge function (hits Google Books / Open Library)
             const { data, error: fnError } = await supabase.functions.invoke(`isbn-lookup/${cleaned}`, { method: 'GET' });
             if (fnError) throw new Error(fnError.message || "Book not found");
             if (data?.error) throw new Error(data.error);
@@ -533,6 +554,24 @@ export function useBookLog() {
     async function selectSearchResult(result) {
         searchResults.value = [];
         if (result.isbn) {
+            // Check if we already have this book in the DB
+            const { data: cached } = await supabase
+                .from("books")
+                .select("*")
+                .eq("isbn", result.isbn)
+                .maybeSingle();
+
+            if (cached) {
+                isbn.value = result.isbn;
+                book.value = cached;
+                supabase
+                    .from("books")
+                    .update({ last_looked_up: new Date().toISOString() })
+                    .eq("isbn", result.isbn)
+                    .then(() => loadHistory());
+                return;
+            }
+
             isbn.value = result.isbn;
             await lookup();
         } else {
@@ -545,7 +584,8 @@ export function useBookLog() {
         error.value = null;
         loading.value = true;
         try {
-            const { data, error: fnError } = await supabase.functions.invoke(`isbn-lookup/${book.value.isbn}`, { method: 'GET' });
+            // Always hit the edge function to re-fetch from Google Books
+            const { data, error: fnError } = await supabase.functions.invoke(`isbn-lookup/${book.value.isbn}?refresh=1`, { method: 'GET' });
             if (fnError) throw new Error(fnError.message || "Refresh failed");
             if (data?.error) throw new Error(data.error);
             book.value = data;
@@ -559,8 +599,14 @@ export function useBookLog() {
     }
 
     function lookupFromHistory(item) {
+        // Already have full data from the history list - no need to re-fetch
         isbn.value = item.isbn;
-        lookup();
+        book.value = item;
+        supabase
+            .from("books")
+            .update({ last_looked_up: new Date().toISOString() })
+            .eq("isbn", item.isbn)
+            .then(() => loadHistory());
     }
 
     async function addToBacklog() {
