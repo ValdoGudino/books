@@ -19,46 +19,15 @@ const {
     confirmationMessage,
     showCelebration,
     celebrationCover,
+    lightboxSrc,
+    openLightbox,
+    closeLightbox,
     init,
 } = useBookLog();
 
 const { user, signOut } = useAuth();
 const descExpanded = ref(false);
-const lightboxSrc = ref(null);
-const lightboxLoading = ref(false);
 watch(viewBookItem, () => { descExpanded.value = false; });
-
-function hiResCoverUrl(url) {
-    if (!url) return url;
-    // Google Books: swap zoom=1 for zoom=0 (largest available)
-    if (url.includes("books.google.com") || url.includes("googleapis.com/books")) {
-        return url.replace(/zoom=\d/, "zoom=0").replace(/&edge=curl/, "");
-    }
-    return url;
-}
-
-function openLightbox(coverUrl, isbn) {
-    const hiRes = hiResCoverUrl(coverUrl);
-    lightboxSrc.value = hiRes;
-    lightboxLoading.value = true;
-
-    // Also try Open Library large cover if we have an ISBN
-    if (isbn && /^\d{10,13}$/.test(isbn)) {
-        const olUrl = `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`;
-        const img = new Image();
-        img.onload = () => {
-            // OL returns a 1x1 pixel for missing covers
-            if (img.naturalWidth > 10) {
-                lightboxSrc.value = olUrl;
-            }
-            lightboxLoading.value = false;
-        };
-        img.onerror = () => { lightboxLoading.value = false; };
-        img.src = olUrl;
-    } else {
-        lightboxLoading.value = false;
-    }
-}
 
 const router = useRouter();
 const route = useRoute();
@@ -71,7 +40,7 @@ async function handleSignOut() {
 
 function handleGlobalKeydown(e) {
     if (e.key === "Escape") {
-        if (lightboxSrc.value) { lightboxSrc.value = null; return; }
+        if (lightboxSrc.value) { closeLightbox(); return; }
         if (editBookForEdit.value) { closeEditModal(); return; }
         if (viewBookItem.value) { closeViewModal(); return; }
         if (showFinishModal.value) { closeFinishModal(); return; }
@@ -347,7 +316,7 @@ onUnmounted(() => document.removeEventListener("keydown", handleGlobalKeydown));
     <div
         v-if="lightboxSrc"
         class="lightbox-overlay"
-        @click="lightboxSrc = null"
+        @click="closeLightbox"
     >
         <img :src="lightboxSrc" alt="" class="lightbox-img" @click.stop />
     </div>

@@ -57,6 +57,7 @@ const viewBookItem = ref(null);
 const confirmationMessage = ref(null);
 const showCelebration = ref(false);
 const celebrationCover = ref(null);
+const lightboxSrc = ref(null);
 
 const finishMessages = [
     "Another one down!",
@@ -999,6 +1000,31 @@ export function useBookLog() {
         book.value = null;
     }
 
+    function hiResCoverUrl(url) {
+        if (!url) return url;
+        if (url.includes("books.google.com") || url.includes("googleapis.com/books")) {
+            return url.replace(/zoom=\d/, "zoom=0").replace(/&edge=curl/, "");
+        }
+        return url;
+    }
+
+    function openLightbox(coverUrl, isbnVal) {
+        const hiRes = hiResCoverUrl(coverUrl);
+        lightboxSrc.value = hiRes;
+        if (isbnVal && /^\d{10,13}$/.test(isbnVal)) {
+            const olUrl = `https://covers.openlibrary.org/b/isbn/${isbnVal}-L.jpg`;
+            const img = new Image();
+            img.onload = () => {
+                if (img.naturalWidth > 10) lightboxSrc.value = olUrl;
+            };
+            img.src = olUrl;
+        }
+    }
+
+    function closeLightbox() {
+        lightboxSrc.value = null;
+    }
+
     function init() {
         loadHistory();
         refreshReadingLog();
@@ -1094,6 +1120,9 @@ export function useBookLog() {
         confirmationMessage,
         showCelebration,
         celebrationCover,
+        lightboxSrc,
+        openLightbox,
+        closeLightbox,
         init,
     };
 }

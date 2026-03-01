@@ -37,32 +37,11 @@ const {
     submitArticle,
     submitPoem,
     clearBook,
+    openLightbox,
 } = useBookLog();
 
 const bookDescExpanded = ref(false);
-const lightboxSrc = ref(null);
 watch(book, () => { bookDescExpanded.value = false; });
-
-function hiResCoverUrl(url) {
-    if (!url) return url;
-    if (url.includes("books.google.com") || url.includes("googleapis.com/books")) {
-        return url.replace(/zoom=\d/, "zoom=0").replace(/&edge=curl/, "");
-    }
-    return url;
-}
-
-function openLightbox(coverUrl, isbn) {
-    const hiRes = hiResCoverUrl(coverUrl);
-    lightboxSrc.value = hiRes;
-    if (isbn && /^\d{10,13}$/.test(isbn)) {
-        const olUrl = `https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg`;
-        const img = new Image();
-        img.onload = () => {
-            if (img.naturalWidth > 10) lightboxSrc.value = olUrl;
-        };
-        img.src = olUrl;
-    }
-}
 </script>
 
 <template>
@@ -264,9 +243,6 @@ function openLightbox(coverUrl, isbn) {
                     <button type="button" class="btn btn-secondary" @click="clearBook">Close</button>
                 </div>
             </div>
-        </div>
-        <div v-if="lightboxSrc" class="lightbox-overlay" @click="lightboxSrc = null">
-            <img :src="lightboxSrc" alt="" class="lightbox-img" @click.stop />
         </div>
     </Teleport>
 </template>
